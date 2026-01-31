@@ -46,6 +46,19 @@
             android:name=".AfterCallActivity"
             android:exported="true"
             android:theme="@style/NormalTheme" />
+            
+        <!-- Full-screen overlay activity for after-call screen -->
+        <activity
+            android:name=".OverlayActivity"
+            android:exported="true"
+            android:theme="@style/NormalTheme"
+            android:launchMode="singleTask"
+            android:showOnLockScreen="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:windowSoftInputMode="adjustResize" />
 
         <receiver android:name=".CallReceiver" android:exported="true">
             <intent-filter>
