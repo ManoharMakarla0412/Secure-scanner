@@ -87,6 +87,24 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
 - `/app/lib/widgets/call_overlay_widget.dart` - Main overlay UI with action buttons
 - `/app/lib/app.dart` - Added route handling for `/create-qr`
 - `/app/android/app/src/main/kotlin/com/example/securescan/MainActivity.kt` - Enhanced app launching
+- `/app/lib/services/call_manager.dart` - Call state handling and overlay triggering
+- `/app/android/app/src/main/kotlin/com/example/securescan/CallReceiver.kt` - Native call detection
+
+### January 2026 - Complete Rewrite
+- **Overlay Widget Completely Rewritten**:
+  - Uses MaterialApp wrapper for proper theme/context
+  - LayoutBuilder for responsive constraints
+  - Stack with Positioned.fill for true full screen
+  - SingleChildScrollView to handle overflow on small screens
+  - Proper safe area handling via MediaQuery padding
+  - Material+InkWell for proper touch feedback
+  - Separated StatelessWidget components for buttons/placeholder
+  - Clean, minimal imports
+  
+- **CallManager Updates**:
+  - positionGravity: PositionGravity.none for static overlay
+  - Increased delays for overlay initialization
+  - Auto permission request if not granted
 
 ## Prioritized Backlog
 
