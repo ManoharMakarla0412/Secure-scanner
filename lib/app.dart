@@ -4,6 +4,7 @@ import 'package:securescan/themes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:securescan/features/onboarding.screens/onboarding_screen.dart';
+import 'package:securescan/features/generate/screens/generator_screen.dart';
 import 'widgets/bottom_nav_shell.dart';
 import 'package:securescan/widgets/call_overlay_widget.dart'; // Import overlay
 
@@ -33,6 +34,12 @@ class SecureScanApp extends StatelessWidget {
                return MaterialPageRoute(
                  builder: (context) => const CallOverlayWidget(),
                  settings: settings, // Pass settings so widget receives args
+               );
+             }
+             if (uri.path == '/create-qr') {
+               return MaterialPageRoute(
+                 builder: (context) => CreateQRScreen(),
+                 settings: settings,
                );
              }
              return null; // Fallback to 'routes' or 'home'
