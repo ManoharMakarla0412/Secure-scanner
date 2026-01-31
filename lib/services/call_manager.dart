@@ -101,13 +101,18 @@ class CallManager {
         _lastNumber = number ?? _lastNumber;
         _lastStatus = status;
       }
-      // Call Ended - Only show overlay if we were actually in a call
+      // Call Ended - Show overlay for all valid call scenarios
       else if (status == PhoneStateStatus.CALL_ENDED) {
-        print("📞 Call Ended detected! wasInCall: $_wasInCall");
+        print("📞 Call Ended detected! wasInCall: $_wasInCall, lastStatus: $_lastStatus");
         
-        // Only show overlay if we were actually in a call before
-        if (_wasInCall && (_lastStatus == PhoneStateStatus.CALL_STARTED || 
-            _lastStatus == PhoneStateStatus.CALL_INCOMING)) {
+        /*
+         * Show overlay in these scenarios:
+         * 1. Incoming call answered then hung up: INCOMING → STARTED → ENDED
+         * 2. Incoming call rejected/missed: INCOMING → ENDED
+         * 3. Outgoing call connected then hung up: STARTED → ENDED
+         * 4. Any call that was tracked: wasInCall = true
+         */
+        if (_wasInCall) {
           final displayNumber = number ?? _lastNumber ?? "Unknown";
           print("📞 Showing overlay for ended call. Number: $displayNumber");
           await _showOverlay("Call ended", number: displayNumber);
@@ -120,10 +125,9 @@ class CallManager {
         _lastNumber = null;
         _lastStatus = status;
       }
-      // NOTHING state - reset but don't show overlay
+      // NOTHING state - don't reset wasInCall as it can come at various times
       else if (status == PhoneStateStatus.NOTHING) {
         print("📱 Phone state: NOTHING");
-        // Don't reset _wasInCall here as NOTHING can come before CALL_ENDED on some devices
         _lastStatus = status;
       }
     } catch (e) {
