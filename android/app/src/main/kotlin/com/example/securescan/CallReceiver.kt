@@ -32,18 +32,35 @@ class CallReceiver : BroadcastReceiver() {
         // Use saved outgoing number if incoming is null (logic for outgoing)
         val number = incomingNumber ?: savedNumber
 
-        if (state == TelephonyManager.EXTRA_STATE_RINGING) {
-             Log.d(TAG, "State: RINGING")
-             // Capture incoming number if needed, but don't show overlay yet
-             // showOverlay(context, number, "incoming")
-        } else if (state == TelephonyManager.EXTRA_STATE_OFFHOOK) {
-             Log.d(TAG, "State: OFFHOOK")
-             // Active call - don't show overlay yet
-             // showOverlay(context, number, "active")
-        } else if (state == TelephonyManager.EXTRA_STATE_IDLE) {
-             Log.d(TAG, "State: IDLE (Ended) - Showing Overlay")
-             showOverlay(context, number, "ended")
-             savedNumber = null // Reset
+        when (state) {
+            TelephonyManager.EXTRA_STATE_RINGING -> {
+                Log.d(TAG, "State: RINGING - Incoming call from: $number")
+                wasInCall = true  // Mark that we have a call
+                if (number != null) savedNumber = number
+                lastState = state
+            }
+            TelephonyManager.EXTRA_STATE_OFFHOOK -> {
+                Log.d(TAG, "State: OFFHOOK - Call answered/active")
+                wasInCall = true  // Call is active
+                lastState = state
+            }
+            TelephonyManager.EXTRA_STATE_IDLE -> {
+                Log.d(TAG, "State: IDLE - wasInCall=$wasInCall, lastState=$lastState")
+                
+                // Only show overlay if we were actually in a call (OFFHOOK or RINGING before)
+                if (wasInCall && (lastState == TelephonyManager.EXTRA_STATE_OFFHOOK || 
+                                  lastState == TelephonyManager.EXTRA_STATE_RINGING)) {
+                    Log.d(TAG, "✅ Call actually ended - Showing Overlay for number: $number")
+                    showOverlay(context, number ?: savedNumber, "ended")
+                } else {
+                    Log.d(TAG, "⚠️ Skipping overlay - was not in active call")
+                }
+                
+                // Reset state
+                wasInCall = false
+                savedNumber = null
+                lastState = state
+            }
         }
     }
 
