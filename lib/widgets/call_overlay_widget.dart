@@ -370,14 +370,14 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
             ),
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         // Ad Container
         Container(
           width: double.infinity,
-          height: 260,
+          height: 280,
           decoration: BoxDecoration(
             color: const Color(0xFF1E293B),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
           ),
           clipBehavior: Clip.antiAlias,
           child: _isBannerAdReady && _bannerAd != null
