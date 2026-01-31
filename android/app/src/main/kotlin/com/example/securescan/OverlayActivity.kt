@@ -1,6 +1,5 @@
 package com.securescan.securescan
 
-import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.util.Log
@@ -10,12 +9,11 @@ import android.graphics.Color
 import android.os.Build
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
-import io.flutter.embedding.engine.dart.DartExecutor
+import io.flutter.plugin.common.MethodChannel
 
 /**
  * Full-screen overlay activity that shows after a call ends.
- * This bypasses Android 12+ background service restrictions by launching
- * as an Activity instead of a Service.
+ * Uses Flutter's overlayMain entry point to render the overlay UI.
  */
 class OverlayActivity : FlutterActivity() {
     
@@ -41,10 +39,17 @@ class OverlayActivity : FlutterActivity() {
         }
     }
     
+    private var appChannel: MethodChannel? = null
+    private var overlayChannel: MethodChannel? = null
+    
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
-        // Make this activity show over lock screen and turn screen on
+        setupFullScreen()
+        Log.d(TAG, "OverlayActivity created")
+    }
+    
+    private fun setupFullScreen() {
+        // Show over lock screen
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -56,29 +61,21 @@ class OverlayActivity : FlutterActivity() {
             )
         }
         
-        // Make truly full screen - hide system bars
+        // Full screen setup
         window.apply {
             addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
+            statusBarColor = Color.WHITE
+            navigationBarColor = Color.WHITE
             
-            // Set status bar and navigation bar transparent
-            statusBarColor = Color.TRANSPARENT
-            navigationBarColor = Color.TRANSPARENT
-            
-            // Full screen flags
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                setDecorFitsSystemWindows(false)
-            } else {
-                @Suppress("DEPRECATION")
-                decorView.systemUiVisibility = (
-                    View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                )
+                setDecorFitsSystemWindows(true)
+            }
+            
+            // Light status bar icons (dark icons on white background)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
             }
         }
-        
-        Log.d(TAG, "OverlayActivity created - Full screen mode enabled")
     }
     
     override fun getDartEntrypointFunctionName(): String {
@@ -88,22 +85,36 @@ class OverlayActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         
-        // Send the call data to Flutter after engine is configured
         val phoneNumber = intent.getStringExtra(EXTRA_PHONE_NUMBER) ?: "Unknown Number"
         val callStatus = intent.getStringExtra(EXTRA_CALL_STATUS) ?: "ended"
         
-        Log.d(TAG, "Configuring Flutter engine with number: $phoneNumber, status: $callStatus")
+        Log.d(TAG, "Configuring with number: $phoneNumber, status: $callStatus")
         
-        // Use a method channel to pass data to the overlay
-        val channel = io.flutter.plugin.common.MethodChannel(
-            flutterEngine.dartExecutor.binaryMessenger,
-            "com.securescan.securescan/overlay"
-        )
+        // Setup app channel for navigation
+        appChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.securescan.securescan/app")
+        appChannel?.setMethodCallHandler { call, result ->
+            when (call.method) {
+                "openApp" -> {
+                    val route = call.argument<String>("route")
+                    openMainApp(route)
+                    result.success(true)
+                }
+                "finishOverlay" -> {
+                    Log.d(TAG, "Finishing overlay activity")
+                    finish()
+                    result.success(true)
+                }
+                else -> result.notImplemented()
+            }
+        }
         
-        // Delay slightly to ensure Flutter is ready
+        // Setup overlay channel for data
+        overlayChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "com.securescan.securescan/overlay")
+        
+        // Send call data to Flutter after a short delay
         window.decorView.postDelayed({
             try {
-                channel.invokeMethod("setCallData", mapOf(
+                overlayChannel?.invokeMethod("setCallData", mapOf(
                     "number" to phoneNumber,
                     "status" to callStatus
                 ))
@@ -111,15 +122,26 @@ class OverlayActivity : FlutterActivity() {
             } catch (e: Exception) {
                 Log.e(TAG, "❌ Failed to send call data: ${e.message}")
             }
-        }, 500)
+        }, 300)
     }
     
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        
-        val phoneNumber = intent.getStringExtra(EXTRA_PHONE_NUMBER)
-        val callStatus = intent.getStringExtra(EXTRA_CALL_STATUS)
-        Log.d(TAG, "onNewIntent: number=$phoneNumber, status=$callStatus")
+    private fun openMainApp(route: String?) {
+        try {
+            Log.d(TAG, "Opening main app with route: $route")
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
+                route?.let { putExtra("route", it) }
+            }
+            startActivity(intent)
+            finish() // Close overlay after launching main app
+        } catch (e: Exception) {
+            Log.e(TAG, "Error opening main app: ${e.message}")
+        }
+    }
+    
+    override fun onBackPressed() {
+        // Close overlay on back press
+        finish()
     }
 }
