@@ -61,10 +61,9 @@ void main() async {
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Safely initialize the global listener ONCE
+  // Initialize the global overlay listener ONCE
   if (!_isOverlayListenerInitialized) {
     try {
-      // Convert to broadcast stream to allow multiple listeners if needed
       FlutterOverlayWindow.overlayListener.asBroadcastStream().listen((data) {
         overlayEventController.add(data);
       }, onError: (e) {
@@ -72,23 +71,12 @@ void overlayMain() {
       });
       _isOverlayListenerInitialized = true;
     } catch (e) {
-      print("Failed to listen to overlay stream (already listened?): $e");
+      print("Failed to listen to overlay stream: $e");
     }
   }
 
-  // Run overlay with light theme to match the clean design
-  runApp(
-    MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: const CallOverlayWidget(),
-      theme: ThemeData(
-        brightness: Brightness.light,
-        scaffoldBackgroundColor: Colors.white,
-        primaryColor: const Color(0xFF0A66FF),
-      ),
-      themeMode: ThemeMode.light,
-    ),
-  );
+  // Run the overlay widget directly (it has its own MaterialApp wrapper)
+  runApp(const CallOverlayWidget());
 }
 
 // AdMOB UNIT IDS
