@@ -153,7 +153,7 @@ class CallManager {
         try {
           await FlutterOverlayWindow.showOverlay(
             enableDrag: false,
-            overlayTitle: "SecureScan - Call Ended",
+            overlayTitle: "QR Barcode Scanner - Call Ended",
             overlayContent: "Tap to interact",
             flag: OverlayFlag.defaultFlag,
             visibility: NotificationVisibility.visibilityPublic,
