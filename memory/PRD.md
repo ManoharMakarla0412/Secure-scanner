@@ -106,6 +106,15 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
   - Increased delays for overlay initialization
   - Auto permission request if not granted
 
+- **Android 12+ Background Service Fix (Jan 2026)**:
+  - Created `OverlayActivity.kt` - A full-screen FlutterActivity that uses `overlayMain` dart entry point
+  - Bypasses `BackgroundServiceStartNotAllowedException` by launching an Activity instead of Service
+  - Activity shows over lock screen (`setShowWhenLocked`, `setTurnScreenOn`)
+  - Added method channel `com.securescan.securescan/overlay` for passing call data
+  - CallReceiver now calls `OverlayActivity.launch()` instead of trying to start overlay service
+  - Overlay widget listens to both overlay stream AND method channel for call data
+  - Close button properly finishes activity with `SystemNavigator.pop()`
+
 ## Prioritized Backlog
 
 ### P0 (Critical)
