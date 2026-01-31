@@ -9,14 +9,8 @@ import 'firebase_options.dart';
 import 'package:securescan/features/scan/screens/scan_screen_qr.dart';
 import 'package:securescan/themes.dart';
 import 'package:securescan/services/call_manager.dart';
-import 'package:securescan/widgets/call_overlay_widget.dart'; // Import CallOverlayWidget
-import 'package:flutter_overlay_window/flutter_overlay_window.dart'; // Needed for overlay listener
-import 'dart:async'; // For StreamController
+import 'package:securescan/widgets/call_overlay_widget.dart';
 import 'app.dart';
-
-// Global broadcast controller to handle overlay events safely across widget rebuilds
-final StreamController<dynamic> overlayEventController = StreamController<dynamic>.broadcast();
-bool _isOverlayListenerInitialized = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -33,49 +27,30 @@ void main() async {
     return true;
   };
 
-  // Enable Google Fonts runtime fetching to avoid errors if assets are missing
+  // Enable Google Fonts runtime fetching
   GoogleFonts.config.allowRuntimeFetching = true;
 
   await MobileAds.instance.initialize();
   await SecureScanThemeController.instance.init();
-  
-  // Close any existing overlay before starting the app
-  try {
-    final isActive = await FlutterOverlayWindow.isActive();
-    if (isActive) {
-      print("⚠️ Closing existing overlay on app start");
-      await FlutterOverlayWindow.closeOverlay();
-    }
-  } catch (e) {
-    print("Error checking/closing overlay: $e");
-  }
-  
-  await CallManager().init(); // <- Initialize CallManager
+  await CallManager().init();
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
   ]).then((_) => runApp(RestartWidget(child: const SecureScanApp())));
 }
 
+/// Entry point for OverlayActivity - shows the after-call overlay screen
 @pragma("vm:entry-point")
 void overlayMain() {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialize the global overlay listener ONCE
-  if (!_isOverlayListenerInitialized) {
-    try {
-      FlutterOverlayWindow.overlayListener.asBroadcastStream().listen((data) {
-        overlayEventController.add(data);
-      }, onError: (e) {
-        print("Overlay Listener Error: $e");
-      });
-      _isOverlayListenerInitialized = true;
-    } catch (e) {
-      print("Failed to listen to overlay stream: $e");
-    }
-  }
-
-  // Run the overlay widget directly (it has its own MaterialApp wrapper)
+  // Initialize Google Fonts
+  GoogleFonts.config.allowRuntimeFetching = true;
+  
+  // Initialize ads for the overlay
+  MobileAds.instance.initialize();
+  
+  // Run the overlay widget
   runApp(const CallOverlayWidget());
 }
 
