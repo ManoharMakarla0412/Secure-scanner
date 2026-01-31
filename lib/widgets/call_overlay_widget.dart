@@ -24,6 +24,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   int _loadAttempts = 0;
   
   static const platform = MethodChannel('com.securescan.securescan/app');
+  static const overlayChannel = MethodChannel('com.securescan.securescan/overlay');
   static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
   static const String _prodAdUnitId = 'ca-app-pub-2961863855425096/9807705543';
   static const int _maxLoadAttempts = 3;
@@ -34,6 +35,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   void initState() {
     super.initState();
     _initOverlayListener();
+    _initMethodChannelListener();
     _loadBannerAd();
     _logAnalytics();
   }
@@ -44,7 +46,28 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
     } catch (_) {}
   }
 
+  void _initMethodChannelListener() {
+    // Listen for call data from native OverlayActivity
+    overlayChannel.setMethodCallHandler((call) async {
+      if (call.method == 'setCallData' && mounted) {
+        final args = call.arguments as Map?;
+        if (args != null) {
+          setState(() {
+            final number = args['number'];
+            final name = args['name'];
+            _phoneNumber = (number == null || number == 'null' || number == 'Unknown')
+                ? "Unknown Number"
+                : number.toString();
+            _contactName = (name == null || name == 'null') ? null : name.toString();
+          });
+          debugPrint('📞 Received call data via method channel: $_phoneNumber');
+        }
+      }
+    });
+  }
+
   void _initOverlayListener() {
+    // Also listen for data from flutter_overlay_window (fallback)
     _overlaySubscription = overlayEventController.stream.listen((data) {
       if (data != null && data is Map && mounted) {
         setState(() {
@@ -55,6 +78,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
               : number.toString();
           _contactName = (name == null || name == 'null') ? null : name.toString();
         });
+        debugPrint('📞 Received call data via overlay stream: $_phoneNumber');
       }
     });
   }
