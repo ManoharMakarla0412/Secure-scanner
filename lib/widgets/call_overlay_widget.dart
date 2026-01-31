@@ -291,19 +291,19 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
           // App Branding - QR Barcode Scanner & Generator
           Row(
             children: [
-              // App Icon
+              // App Icon - using QR.png from assets
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
                 child: Image.asset(
-                  'assets/icon/icon.png',
-                  width: 32,
-                  height: 32,
+                  'assets/QR.png',
+                  width: 36,
+                  height: 36,
                   errorBuilder: (context, error, stackTrace) {
                     // Fallback QR icon if asset not found
                     return Container(
-                      width: 32,
-                      height: 32,
-                      padding: const EdgeInsets.all(4),
+                      width: 36,
+                      height: 36,
+                      padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
                         color: const Color(0xFF0A66FF),
                         borderRadius: BorderRadius.circular(8),
@@ -311,7 +311,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
                       child: const Icon(
                         Icons.qr_code_2,
                         color: Colors.white,
-                        size: 20,
+                        size: 22,
                       ),
                     );
                   },
