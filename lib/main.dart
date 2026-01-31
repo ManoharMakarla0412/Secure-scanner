@@ -76,15 +76,17 @@ void overlayMain() {
     }
   }
 
-  // Needed for fonts/theme in overlay, but overlay context is limited
-  // Initialize minimal things if needed
+  // Run overlay with light theme to match the clean design
   runApp(
     MaterialApp(
       debugShowCheckedModeBanner: false,
       home: const CallOverlayWidget(),
-      theme: SecureScanTheme.lightTheme, 
-      darkTheme: SecureScanTheme.darkTheme,
-      themeMode: ThemeMode.system, // Or force dark
+      theme: ThemeData(
+        brightness: Brightness.light,
+        scaffoldBackgroundColor: Colors.white,
+        primaryColor: const Color(0xFF0A66FF),
+      ),
+      themeMode: ThemeMode.light,
     ),
   );
 }
