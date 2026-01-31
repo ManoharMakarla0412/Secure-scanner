@@ -2,11 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
-import 'package:securescan/main.dart';
 
 class CallOverlayWidget extends StatefulWidget {
   const CallOverlayWidget({Key? key}) : super(key: key);
@@ -18,13 +16,13 @@ class CallOverlayWidget extends StatefulWidget {
 class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   String _phoneNumber = "Unknown Number";
   String? _contactName;
-  StreamSubscription? _overlaySubscription;
   BannerAd? _bannerAd;
   bool _isBannerAdReady = false;
   int _loadAttempts = 0;
   
   static const platform = MethodChannel('com.securescan.securescan/app');
   static const overlayChannel = MethodChannel('com.securescan.securescan/overlay');
+  
   static const String _testAdUnitId = 'ca-app-pub-3940256099942544/6300978111';
   static const String _prodAdUnitId = 'ca-app-pub-2961863855425096/9807705543';
   static const int _maxLoadAttempts = 3;
@@ -34,8 +32,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   @override
   void initState() {
     super.initState();
-    _initOverlayListener();
-    _initMethodChannelListener();
+    _initMethodChannel();
     _loadBannerAd();
     _logAnalytics();
   }
@@ -46,7 +43,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
     } catch (_) {}
   }
 
-  void _initMethodChannelListener() {
+  void _initMethodChannel() {
     // Listen for call data from native OverlayActivity
     overlayChannel.setMethodCallHandler((call) async {
       if (call.method == 'setCallData' && mounted) {
@@ -60,25 +57,8 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
                 : number.toString();
             _contactName = (name == null || name == 'null') ? null : name.toString();
           });
-          debugPrint('📞 Received call data via method channel: $_phoneNumber');
+          debugPrint('📞 Received call data: $_phoneNumber');
         }
-      }
-    });
-  }
-
-  void _initOverlayListener() {
-    // Also listen for data from flutter_overlay_window (fallback)
-    _overlaySubscription = overlayEventController.stream.listen((data) {
-      if (data != null && data is Map && mounted) {
-        setState(() {
-          final number = data['number'];
-          final name = data['name'];
-          _phoneNumber = (number == null || number == 'null' || number == 'Unknown')
-              ? "Unknown Number"
-              : number.toString();
-          _contactName = (name == null || name == 'null') ? null : name.toString();
-        });
-        debugPrint('📞 Received call data via overlay stream: $_phoneNumber');
       }
     });
   }
@@ -107,118 +87,81 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   Future<void> _closeOverlay() async {
     try {
-      // Try to close flutter overlay window first
-      try {
-        await FlutterOverlayWindow.closeOverlay();
-      } catch (_) {}
-      
-      // Also try to finish the activity (if running as OverlayActivity)
-      try {
-        await platform.invokeMethod('finishActivity');
-      } catch (_) {}
-      
-      // Exit the app if it's the overlay entry point
-      SystemNavigator.pop();
+      // Finish the OverlayActivity
+      await platform.invokeMethod('finishOverlay');
     } catch (e) {
-      debugPrint('Error closing overlay: $e');
-      SystemNavigator.pop();
+      debugPrint('Error closing: $e');
     }
+    // Exit
+    SystemNavigator.pop();
   }
 
   Future<void> _createContactQR() async {
     try {
-      // Close overlay first
-      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
-      
-      // Open main app with create-qr route
       await platform.invokeMethod('openApp', {'route': '/create-qr'});
-      
-      // Exit overlay activity
-      SystemNavigator.pop();
     } catch (e) {
       debugPrint('Error: $e');
-      SystemNavigator.pop();
     }
+    SystemNavigator.pop();
   }
 
   Future<void> _scanNewCode() async {
     try {
-      // Close overlay first
-      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
-      
-      // Open main app
       await platform.invokeMethod('openApp', {'route': '/'});
-      
-      // Exit overlay activity
-      SystemNavigator.pop();
     } catch (e) {
       debugPrint('Error: $e');
-      SystemNavigator.pop();
     }
+    SystemNavigator.pop();
   }
 
   @override
   void dispose() {
-    _overlaySubscription?.cancel();
     _bannerAd?.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Get screen dimensions
+    final size = MediaQuery.of(context).size;
+    final padding = MediaQuery.of(context).padding;
+    
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        scaffoldBackgroundColor: Colors.white,
-      ),
       home: Scaffold(
-        backgroundColor: Colors.white,
-        // Extend body behind system bars for true full screen
-        extendBody: true,
-        extendBodyBehindAppBar: true,
         body: Container(
-          width: double.infinity,
-          height: double.infinity,
+          width: size.width,
+          height: size.height,
           color: Colors.white,
-          child: SafeArea(
-            top: true,
-            bottom: true,
-            child: Column(
-              children: [
-                // Header
-                _buildHeader(),
-                
-                // Scrollable content
-                Expanded(
-                  child: SingleChildScrollView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const SizedBox(height: 32),
-                        
-                        // Call Ended Title
-                        _buildCallEndedSection(),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Action Buttons
-                        _buildActionButtons(),
-                        
-                        const SizedBox(height: 40),
-                        
-                        // Ad Section
-                        _buildAdSection(),
-                        
-                        const SizedBox(height: 32),
-                      ],
-                    ),
+          child: Column(
+            children: [
+              // Status bar space
+              SizedBox(height: padding.top),
+              
+              // Header
+              _buildHeader(),
+              
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 20),
+                      _buildCallEndedSection(),
+                      const SizedBox(height: 40),
+                      _buildActionButtons(),
+                      const SizedBox(height: 40),
+                      _buildAdSection(),
+                    ],
                   ),
                 ),
-              ],
-            ),
+              ),
+              
+              // Bottom safe area
+              SizedBox(height: padding.bottom),
+            ],
           ),
         ),
       ),
@@ -228,38 +171,29 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        border: Border(
-          bottom: BorderSide(color: Colors.grey.shade200, width: 1),
-        ),
+        border: Border(bottom: BorderSide(color: Colors.grey.shade200)),
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Close Button
-          Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: _closeOverlay,
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade100,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Icon(Icons.close, color: Colors.grey.shade700, size: 24),
+          GestureDetector(
+            onTap: _closeOverlay,
+            child: Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                borderRadius: BorderRadius.circular(12),
               ),
+              child: Icon(Icons.close, color: Colors.grey.shade700, size: 24),
             ),
           ),
-          
-          // App Branding
+          // Branding
           Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              // App Icon
               Container(
                 width: 40,
                 height: 40,
@@ -270,10 +204,8 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
                 child: const Icon(Icons.qr_code_2, color: Colors.white, size: 24),
               ),
               const SizedBox(width: 12),
-              // App Name
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
                     "QR Barcode Scanner",
@@ -302,24 +234,22 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   Widget _buildCallEndedSection() {
     final displayName = _contactName ?? _phoneNumber;
-    
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           "Call Ended",
           style: GoogleFonts.inter(
-            fontSize: 34,
+            fontSize: 36,
             fontWeight: FontWeight.w800,
             color: Colors.black,
-            letterSpacing: -1,
           ),
         ),
-        const SizedBox(height: 6),
+        const SizedBox(height: 8),
         Text(
           "with $displayName",
           style: GoogleFonts.inter(
-            fontSize: 17,
+            fontSize: 18,
             fontWeight: FontWeight.w400,
             color: Colors.grey.shade600,
           ),
@@ -332,7 +262,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
     return Row(
       children: [
         Expanded(
-          child: _ActionButton(
+          child: _buildButton(
             icon: Icons.contact_page_outlined,
             label: "Create\nContact QR",
             onTap: _createContactQR,
@@ -340,7 +270,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
         ),
         const SizedBox(width: 16),
         Expanded(
-          child: _ActionButton(
+          child: _buildButton(
             icon: Icons.camera_alt_outlined,
             label: "Scan\nNew Code",
             onTap: _scanNewCode,
@@ -350,11 +280,57 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
     );
   }
 
+  Widget _buildButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF0A66FF),
+          borderRadius: BorderRadius.circular(20),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0A66FF).withOpacity(0.3),
+              blurRadius: 16,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+                height: 1.3,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildAdSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Ad Label
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
           decoration: BoxDecoration(
@@ -371,7 +347,6 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
           ),
         ),
         const SizedBox(height: 12),
-        // Ad Container
         Container(
           width: double.infinity,
           height: 280,
@@ -382,100 +357,29 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
           clipBehavior: Clip.antiAlias,
           child: _isBannerAdReady && _bannerAd != null
               ? AdWidget(ad: _bannerAd!)
-              : _AdPlaceholder(),
+              : Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.play_circle_outline,
+                        color: Colors.white.withOpacity(0.5),
+                        size: 56,
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        "Video Ad\nPlaceholder",
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          fontSize: 16,
+                          color: Colors.white.withOpacity(0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
         ),
       ],
-    );
-  }
-}
-
-// Separate StatelessWidget for Action Button
-class _ActionButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: const Color(0xFF0A66FF),
-      borderRadius: BorderRadius.circular(20),
-      elevation: 6,
-      shadowColor: const Color(0xFF0A66FF).withOpacity(0.4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(icon, color: Colors.white, size: 36),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                label,
-                textAlign: TextAlign.center,
-                style: GoogleFonts.inter(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.white,
-                  height: 1.3,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-// Separate StatelessWidget for Ad Placeholder
-class _AdPlaceholder extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.play_circle_outline,
-              color: Colors.white.withOpacity(0.5),
-              size: 56,
-            ),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "Video Ad\nPlaceholder",
-            textAlign: TextAlign.center,
-            style: GoogleFonts.inter(
-              fontSize: 16,
-              fontWeight: FontWeight.w500,
-              color: Colors.white.withOpacity(0.5),
-              height: 1.4,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
