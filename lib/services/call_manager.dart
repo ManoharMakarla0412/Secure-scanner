@@ -13,12 +13,20 @@ class CallManager {
 
   CallManager._();
 
-  // ignore: unused_field
   StreamSubscription<PhoneState>? _subscription;
-  // ignore: unused_field
   PhoneStateStatus _lastStatus = PhoneStateStatus.NOTHING;
+  String? _lastNumber;
+  bool _wasInCall = false; // Track if we were actually in a call
+  bool _isInitialized = false;
 
   Future<void> init() async {
+    // Prevent multiple initializations
+    if (_isInitialized) {
+      print("⚠️ CallManager already initialized");
+      return;
+    }
+    _isInitialized = true;
+    
     try {
       await _requestPermissions();
       
@@ -35,8 +43,12 @@ class CallManager {
         if (call.method == 'triggerOverlay') {
           final status = call.arguments['status'] as String? ?? 'ended';
           final number = call.arguments['number'] as String? ?? 'Unknown';
-          print("📞 Overlay trigger received: status=$status, number=$number");
-          await _showOverlay("Call $status", number: number);
+          print("📞 Overlay trigger received from native: status=$status, number=$number");
+          
+          // Only show overlay if we were in a call
+          if (status == 'ended') {
+            await _showOverlay("Call ended", number: number);
+          }
         }
       });
       print("✅ Method channel handler registered");
@@ -44,6 +56,8 @@ class CallManager {
       _subscription = PhoneState.stream.listen((event) {
         _handlePhoneState(event.status, event.number);
       });
+      
+      print("✅ CallManager initialized successfully");
     } catch (e) {
       print("Error initializing CallManager: $e");
     }
@@ -55,45 +69,62 @@ class CallManager {
       Permission.phone,
       Permission.contacts, // Sometimes needed for number resolution
       Permission.notification, // Required for foreground services on Android 13+
-      // Permission.callLog, // If available in package, but 'phone' often covers it
     ].request();
     
     print("Permission Statuses: $statuses");
     
     // Check and request System Alert Window (Overlay) permission
-    // Android requires special handling for this permission
     final overlayStatus = await Permission.systemAlertWindow.status;
     if (!overlayStatus.isGranted) {
       final status = await Permission.systemAlertWindow.request();
       if (!status.isGranted) {
-        // Optional: Open settings if critical. 
-        // For a smoother UX, maybe we should only do this when the user enables the feature explicitly? 
-        // But since this is a "Critical Feature" request, we'll try to ensure we have it.
-        // openAppSettings() might not go to the overlay page directly.
+        print("⚠️ Overlay permission not granted");
       }
     }
   }
 
   void _handlePhoneState(PhoneStateStatus status, String? number) async {
     try {
-      print("Phone State Changed: $status, number: $number");
+      print("📱 Phone State Changed: $status, number: $number, wasInCall: $_wasInCall, lastStatus: $_lastStatus");
 
-      // Incoming Call
+      // Incoming Call - mark that we're in a call
       if (status == PhoneStateStatus.CALL_INCOMING) {
-        print("Incoming Call detected: $number");
+        print("📞 Incoming Call detected: $number");
+        _wasInCall = true;
+        _lastNumber = number;
         _lastStatus = status;
       }
-      // Outgoing Call or In Call
+      // Call Started (answered or outgoing) - mark that we're in a call
       else if (status == PhoneStateStatus.CALL_STARTED) {
-         print("Call Started: $number");
-         _lastStatus = status;
+        print("📞 Call Started: $number");
+        _wasInCall = true;
+        _lastNumber = number ?? _lastNumber;
+        _lastStatus = status;
       }
-      // Call Ended - Show overlay immediately
+      // Call Ended - Only show overlay if we were actually in a call
       else if (status == PhoneStateStatus.CALL_ENDED) {
-         print("📞 Call Ended detected in Flutter! Number: $number");
-         // Show overlay directly from Flutter side
-         await _showOverlay("Call ended", number: number ?? "Unknown");
-         _lastStatus = status;
+        print("📞 Call Ended detected! wasInCall: $_wasInCall");
+        
+        // Only show overlay if we were actually in a call before
+        if (_wasInCall && (_lastStatus == PhoneStateStatus.CALL_STARTED || 
+            _lastStatus == PhoneStateStatus.CALL_INCOMING)) {
+          final displayNumber = number ?? _lastNumber ?? "Unknown";
+          print("📞 Showing overlay for ended call. Number: $displayNumber");
+          await _showOverlay("Call ended", number: displayNumber);
+        } else {
+          print("⚠️ Skipping overlay - was not in an active call");
+        }
+        
+        // Reset state
+        _wasInCall = false;
+        _lastNumber = null;
+        _lastStatus = status;
+      }
+      // NOTHING state - reset but don't show overlay
+      else if (status == PhoneStateStatus.NOTHING) {
+        print("📱 Phone state: NOTHING");
+        // Don't reset _wasInCall here as NOTHING can come before CALL_ENDED on some devices
+        _lastStatus = status;
       }
     } catch (e) {
       print("Error in _handlePhoneState: $e");
@@ -102,45 +133,46 @@ class CallManager {
 
   static const platform = MethodChannel('com.securescan.securescan/app');
 
-    Future<void> _showOverlay(String message, {bool isFull = true, String? number}) async {
+  Future<void> _showOverlay(String message, {bool isFull = true, String? number}) async {
     try {
       print("🔍 Attempting to show system overlay...");
 
+      // Check if overlay is already active
+      final isActive = await FlutterOverlayWindow.isActive();
+      if (isActive) {
+        print("⚠️ Overlay already active, closing first...");
+        await FlutterOverlayWindow.closeOverlay();
+        await Future.delayed(const Duration(milliseconds: 300));
+      }
+
       if (await FlutterOverlayWindow.isPermissionGranted()) {
         try {
-          // Close any existing overlay first
-          // await FlutterOverlayWindow.closeOverlay();
-          
           await FlutterOverlayWindow.showOverlay(
             enableDrag: false,
             overlayTitle: "Call Ended",
             overlayContent: "SecureScan Info",
-            flag: OverlayFlag.defaultFlag, // defaultFlag = focusable but allows touch through?
-            // On Android 12+, we need explicit flags for safety.
-            // OverlayFlag.focusPointer // gives focus to overlay
+            flag: OverlayFlag.defaultFlag,
             visibility: NotificationVisibility.visibilitySecret,
-            // positionGravity: PositionGravity.center, // Removed as invalid
             height: WindowSize.matchParent,
             width: WindowSize.matchParent,
             alignment: OverlayAlignment.center,
           );
           
-          // Pass data to the overlay via sharing (since arguments support in showOverlay is limited/async)
-          // Actually, showOverlay doesn't take 'arguments' map directly in all versions, 
-          // let's use shareData which is the standard way for this plugin.
-           await FlutterOverlayWindow.shareData({
-             'status': 'ended', 
-             'number': number ?? 'Unknown'
-           });
+          // Small delay to ensure overlay is ready
+          await Future.delayed(const Duration(milliseconds: 200));
+          
+          // Pass data to the overlay
+          await FlutterOverlayWindow.shareData({
+            'status': 'ended', 
+            'number': number ?? 'Unknown'
+          });
            
-          print("✅ System overlay command sent");
+          print("✅ System overlay shown successfully");
         } catch (e) {
           print("❌ Failed to launch system overlay: $e");
         }
       } else {
         print("⚠️ Overlay permission NOT granted.");
-        // Optional: request permission again or navigate to settings
-        // await FlutterOverlayWindow.requestPermission();
       }
 
     } catch (e) {
