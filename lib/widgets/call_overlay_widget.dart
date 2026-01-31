@@ -104,6 +104,10 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   @override
   void initState() {
     super.initState();
+    // Set default state so UI shows immediately
+    _message = "Call Ended";
+    _phoneNumber = "Unknown Number";
+    
     _loadBannerAd();
     _initOverlayListener();
     // Don't listen to phone state here - CallManager handles it
