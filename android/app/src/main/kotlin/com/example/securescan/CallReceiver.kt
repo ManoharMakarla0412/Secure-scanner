@@ -10,6 +10,8 @@ import android.util.Log // Import Log
 class CallReceiver : BroadcastReceiver() {
     companion object {
         var savedNumber: String? = null
+        var wasInCall: Boolean = false  // Track if we were in an actual call
+        var lastState: String? = null   // Track last state to detect transitions
         private const val TAG = "SecureScanCallReceiver"
     }
 
