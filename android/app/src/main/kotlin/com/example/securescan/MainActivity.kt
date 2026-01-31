@@ -62,12 +62,14 @@ class MainActivity : FlutterActivity() {
         setIntent(intent)
         try {
             val route = intent.getStringExtra("route")
-             android.util.Log.d("StartApp", "onNewIntent received route: $route")
-            if (route != null) {
+            Log.d(TAG, "onNewIntent received route: $route")
+            
+            // Don't navigate to overlay route - overlay has its own entry point
+            if (route != null && route != "/overlay") {
                 flutterEngine?.navigationChannel?.pushRoute(route)
             }
         } catch (e: Exception) {
-             android.util.Log.e("StartApp", "Error in onNewIntent: ${e.message}")
+            Log.e(TAG, "Error in onNewIntent: ${e.message}")
         }
     }
 
