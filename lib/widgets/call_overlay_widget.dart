@@ -181,17 +181,101 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   Future<void> _shareQRCode() async {
     try {
-      await Share.share(
-        'Check out my contact QR code: https://securescan.com/contact',
-        subject: 'SecureScan Contact QR',
+      // Generate QR code image and share it
+      final qrData = "tel:${_phoneNumber ?? 'Unknown'}";
+      
+      // Create QR image programmatically
+      final qrPainter = QrPainter(
+        data: qrData,
+        version: QrVersions.auto,
+        gapless: true,
+        color: Colors.black,
+        emptyColor: Colors.white,
       );
+      
+      final tempDir = await getTemporaryDirectory();
+      final file = File('${tempDir.path}/contact_qr.png');
+      
+      final imageSize = 300.0;
+      final pictureRecorder = ui.PictureRecorder();
+      final canvas = Canvas(pictureRecorder);
+      
+      // Draw white background
+      canvas.drawRect(
+        Rect.fromLTWH(0, 0, imageSize, imageSize),
+        Paint()..color = Colors.white,
+      );
+      
+      // Draw QR code
+      qrPainter.paint(canvas, const Size(300, 300));
+      
+      final picture = pictureRecorder.endRecording();
+      final image = await picture.toImage(imageSize.toInt(), imageSize.toInt());
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      
+      if (byteData != null) {
+        await file.writeAsBytes(byteData.buffer.asUint8List());
+        
+        await Share.shareXFiles(
+          [XFile(file.path)],
+          text: 'Contact QR Code for ${_phoneNumber ?? "Unknown Number"}',
+          subject: 'SecureScan Contact QR',
+        );
+      }
+      
       // Close overlay after sharing
       await Future.delayed(const Duration(milliseconds: 500));
       await _closeOverlay();
     } catch (e) {
       debugPrint('Error sharing QR code: $e');
-      // Close overlay even if sharing fails
+      // Fallback to text-only share
+      try {
+        await Share.share(
+          'Contact: ${_phoneNumber ?? "Unknown Number"}',
+          subject: 'SecureScan Contact',
+        );
+      } catch (_) {}
       await _closeOverlay();
+    }
+  }
+  
+  /// Opens the main SecureScan app
+  Future<void> _openApp() async {
+    try {
+      debugPrint('📱 Opening main app...');
+      
+      // Close overlay first
+      await FlutterOverlayWindow.closeOverlay();
+      
+      // Launch main app via platform channel
+      await platform.invokeMethod('openApp', {'route': '/'});
+      
+    } catch (e) {
+      debugPrint('Error opening app: $e');
+      // Fallback: try to launch via package
+      try {
+        await FlutterOverlayWindow.closeOverlay();
+      } catch (_) {}
+    }
+  }
+  
+  /// Opens the Create QR screen in the main app
+  Future<void> _openCreateQR() async {
+    try {
+      debugPrint('📝 Opening Create QR screen...');
+      
+      // Close overlay first
+      await FlutterOverlayWindow.closeOverlay();
+      
+      // Launch main app with route to create QR
+      await platform.invokeMethod('openApp', {'route': '/create-qr'});
+      
+    } catch (e) {
+      debugPrint('Error opening Create QR: $e');
+      // Fallback: just close overlay and open app
+      try {
+        await FlutterOverlayWindow.closeOverlay();
+      } catch (_) {}
     }
   }
 
