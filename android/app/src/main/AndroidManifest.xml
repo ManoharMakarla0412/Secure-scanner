@@ -51,7 +51,7 @@
         <activity
             android:name=".OverlayActivity"
             android:exported="true"
-            android:theme="@style/NormalTheme"
+            android:theme="@style/OverlayTheme"
             android:launchMode="singleTask"
             android:showOnLockScreen="true"
             android:turnScreenOn="true"
