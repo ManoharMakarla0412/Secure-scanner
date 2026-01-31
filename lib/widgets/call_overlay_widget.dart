@@ -166,67 +166,60 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   @override
   Widget build(BuildContext context) {
-    // Use Scaffold with resizeToAvoidBottomInset for proper full screen
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        useMaterial3: true,
+        scaffoldBackgroundColor: Colors.white,
+      ),
       home: Scaffold(
         backgroundColor: Colors.white,
-        body: LayoutBuilder(
-          builder: (context, constraints) {
-            return Container(
-              width: constraints.maxWidth,
-              height: constraints.maxHeight,
-              color: Colors.white,
-              child: Stack(
-                children: [
-                  // Main Content - Positioned to fill entire screen
-                  Positioned.fill(
+        // Extend body behind system bars for true full screen
+        extendBody: true,
+        extendBodyBehindAppBar: true,
+        body: Container(
+          width: double.infinity,
+          height: double.infinity,
+          color: Colors.white,
+          child: SafeArea(
+            top: true,
+            bottom: true,
+            child: Column(
+              children: [
+                // Header
+                _buildHeader(),
+                
+                // Scrollable content
+                Expanded(
+                  child: SingleChildScrollView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Top safe area padding
-                        SizedBox(height: MediaQuery.of(context).padding.top + 8),
+                        const SizedBox(height: 32),
                         
-                        // Header
-                        _buildHeader(),
+                        // Call Ended Title
+                        _buildCallEndedSection(),
                         
-                        // Scrollable content area
-                        Expanded(
-                          child: SingleChildScrollView(
-                            physics: const ClampingScrollPhysics(),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 20),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const SizedBox(height: 32),
-                                  
-                                  // Call Ended Title
-                                  _buildCallEndedSection(),
-                                  
-                                  const SizedBox(height: 40),
-                                  
-                                  // Action Buttons
-                                  _buildActionButtons(),
-                                  
-                                  const SizedBox(height: 40),
-                                  
-                                  // Ad Section
-                                  _buildAdSection(),
-                                  
-                                  // Bottom safe area
-                                  SizedBox(height: MediaQuery.of(context).padding.bottom + 20),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ),
+                        const SizedBox(height: 40),
+                        
+                        // Action Buttons
+                        _buildActionButtons(),
+                        
+                        const SizedBox(height: 40),
+                        
+                        // Ad Section
+                        _buildAdSection(),
+                        
+                        const SizedBox(height: 32),
                       ],
                     ),
                   ),
-                ],
-              ),
-            );
-          },
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
