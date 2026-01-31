@@ -207,48 +207,54 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   @override
   Widget build(BuildContext context) {
     // Get the screen size for full screen coverage
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
-    final statusBarHeight = MediaQuery.of(context).padding.top;
+    final mediaQuery = MediaQuery.of(context);
+    final screenHeight = mediaQuery.size.height;
+    final screenWidth = mediaQuery.size.width;
+    final statusBarHeight = mediaQuery.padding.top;
+    final bottomPadding = mediaQuery.padding.bottom;
     
     return Material(
+      type: MaterialType.canvas,
       color: Colors.white,
-      child: Container(
+      child: SizedBox(
         width: screenWidth,
         height: screenHeight,
-        color: Colors.white,
-        child: Column(
-          children: [
-            // Status bar spacer
-            SizedBox(height: statusBarHeight > 0 ? statusBarHeight : 24),
-            
-            // Top Header Bar
-            _buildHeader(),
-            
-            // Main Content
-            Expanded(
-              child: Column(
-                children: [
-                  const SizedBox(height: 20),
-                  
-                  // Call Ended Section
-                  _buildCallEndedSection(),
-                  
-                  const SizedBox(height: 24),
-                  
-                  // Action Buttons
-                  _buildActionButtons(),
-                  
-                  const Spacer(),
-                  
-                  // Ad Section
-                  _buildAdSection(),
-                  
-                  const SizedBox(height: 16),
-                ],
+        child: Container(
+          color: Colors.white,
+          child: Column(
+            children: [
+              // Status bar spacer - accounts for notch/status bar
+              SizedBox(height: statusBarHeight > 0 ? statusBarHeight : 32),
+              
+              // Top Header Bar
+              _buildHeader(),
+              
+              // Main Content
+              Expanded(
+                child: Column(
+                  children: [
+                    const SizedBox(height: 24),
+                    
+                    // Call Ended Section
+                    _buildCallEndedSection(),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // Action Buttons
+                    _buildActionButtons(),
+                    
+                    const Spacer(),
+                    
+                    // Ad Section
+                    _buildAdSection(),
+                    
+                    // Bottom padding for navigation bar
+                    SizedBox(height: bottomPadding > 0 ? bottomPadding + 8 : 16),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
