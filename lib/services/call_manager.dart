@@ -153,9 +153,9 @@ class CallManager {
             overlayContent: "Tap to interact",
             flag: OverlayFlag.defaultFlag,
             visibility: NotificationVisibility.visibilityPublic,
-            height: WindowSize.fullCover,  // Changed to fullCover
-            width: WindowSize.fullCover,   // Changed to fullCover
-            alignment: OverlayAlignment.center,
+            height: WindowSize.fullCover,    // Full height coverage
+            width: WindowSize.matchParent,   // Full width
+            alignment: OverlayAlignment.topCenter,
             startPosition: const OverlayPosition(0, 0),
           );
           
