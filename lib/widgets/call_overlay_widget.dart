@@ -107,9 +107,21 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   Future<void> _closeOverlay() async {
     try {
-      await FlutterOverlayWindow.closeOverlay();
+      // Try to close flutter overlay window first
+      try {
+        await FlutterOverlayWindow.closeOverlay();
+      } catch (_) {}
+      
+      // Also try to finish the activity (if running as OverlayActivity)
+      try {
+        await platform.invokeMethod('finishActivity');
+      } catch (_) {}
+      
+      // Exit the app if it's the overlay entry point
+      SystemNavigator.pop();
     } catch (e) {
       debugPrint('Error closing overlay: $e');
+      SystemNavigator.pop();
     }
   }
 
