@@ -39,6 +39,15 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
   - Updated MainActivity.kt with proper intent flags for launching from overlay
   - Set default overlay state so UI shows immediately on overlay display
 
+- **Bug Fixes - Overlay Triggering Issues**:
+  - Fixed overlay showing on app launch by adding call state tracking (`wasInCall`, `lastStatus`)
+  - Enhanced CallManager with proper call lifecycle tracking (INCOMING → STARTED → ENDED)
+  - Updated CallReceiver.kt with state machine logic to only trigger overlay after actual calls
+  - Added overlay cleanup on app start to close any lingering overlays
+  - Prevented `/overlay` route from being used as initial route in MainActivity
+  - Added protection against overlay route in onNewIntent handler
+  - Enhanced debugging with detailed logging for call state transitions
+
 ### Files Modified
 - `/app/lib/widgets/call_overlay_widget.dart` - Main overlay UI with action buttons
 - `/app/lib/app.dart` - Added route handling for `/create-qr`
