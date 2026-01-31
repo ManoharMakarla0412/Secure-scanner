@@ -146,38 +146,39 @@ class CallManager {
       if (isActive) {
         print("⚠️ Overlay already active, closing first...");
         await FlutterOverlayWindow.closeOverlay();
-        await Future.delayed(const Duration(milliseconds: 300));
+        await Future.delayed(const Duration(milliseconds: 500));
       }
 
       if (await FlutterOverlayWindow.isPermissionGranted()) {
         try {
+          // Show full screen overlay
           await FlutterOverlayWindow.showOverlay(
             enableDrag: false,
-            overlayTitle: "QR Barcode Scanner - Call Ended",
-            overlayContent: "Tap to interact",
+            overlayTitle: "QR Barcode Scanner",
+            overlayContent: "Call Ended",
             flag: OverlayFlag.defaultFlag,
             visibility: NotificationVisibility.visibilityPublic,
-            height: WindowSize.fullCover,    // Full height coverage
-            width: WindowSize.matchParent,   // Full width
-            alignment: OverlayAlignment.topCenter,
-            startPosition: const OverlayPosition(0, 0),
+            positionGravity: PositionGravity.auto,
+            height: WindowSize.fullCover,
+            width: WindowSize.matchParent,
           );
           
-          // Small delay to ensure overlay is ready
-          await Future.delayed(const Duration(milliseconds: 200));
+          // Delay to ensure overlay window is ready before sending data
+          await Future.delayed(const Duration(milliseconds: 400));
           
-          // Pass data to the overlay
+          // Pass call data to the overlay widget
           await FlutterOverlayWindow.shareData({
             'status': 'ended', 
-            'number': number ?? 'Unknown'
+            'number': number ?? 'Unknown Number'
           });
            
-          print("✅ System overlay shown successfully");
+          print("✅ System overlay shown successfully for number: $number");
         } catch (e) {
           print("❌ Failed to launch system overlay: $e");
         }
       } else {
-        print("⚠️ Overlay permission NOT granted.");
+        print("⚠️ Overlay permission NOT granted. Requesting...");
+        await FlutterOverlayWindow.requestPermission();
       }
 
     } catch (e) {
