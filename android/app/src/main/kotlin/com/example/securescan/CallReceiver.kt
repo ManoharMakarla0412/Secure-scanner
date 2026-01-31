@@ -20,7 +20,7 @@ class CallReceiver : BroadcastReceiver() {
         val state = intent.getStringExtra(TelephonyManager.EXTRA_STATE)
         val incomingNumber = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER)
         
-        Log.d(TAG, "onReceive: action=$action, state=$state, incomingNumber=$incomingNumber")
+        Log.d(TAG, "onReceive: action=$action, state=$state, incomingNumber=$incomingNumber, wasInCall=$wasInCall, lastState=$lastState")
 
         if (action == Intent.ACTION_NEW_OUTGOING_CALL) {
             savedNumber = intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
