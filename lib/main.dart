@@ -38,6 +38,18 @@ void main() async {
 
   await MobileAds.instance.initialize();
   await SecureScanThemeController.instance.init();
+  
+  // Close any existing overlay before starting the app
+  try {
+    final isActive = await FlutterOverlayWindow.isActive();
+    if (isActive) {
+      print("⚠️ Closing existing overlay on app start");
+      await FlutterOverlayWindow.closeOverlay();
+    }
+  } catch (e) {
+    print("Error checking/closing overlay: $e");
+  }
+  
   await CallManager().init(); // <- Initialize CallManager
 
   SystemChrome.setPreferredOrientations([
