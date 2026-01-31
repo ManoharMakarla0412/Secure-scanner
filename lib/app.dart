@@ -81,6 +81,14 @@ class _LaunchDeciderState extends State<_LaunchDecider> {
     // Ensure navigation happens after first frame
     if (!mounted) return;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      // Check if we're being opened with a specific route (from overlay)
+      final currentRoute = ModalRoute.of(context)?.settings.name;
+      
+      // Don't redirect if we're showing overlay or create-qr
+      if (currentRoute == '/overlay' || currentRoute == '/create-qr') {
+        return;
+      }
+      
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => hasAnyData ? BottomNavShell() : const OnboardingScreen(),
