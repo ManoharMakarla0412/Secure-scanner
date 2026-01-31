@@ -75,7 +75,7 @@ class CallReceiver : BroadcastReceiver() {
                 putExtra("number", number ?: "Unknown")
             }
             context.sendBroadcast(broadcastIntent)
-            Log.d(TAG, "Broadcast sent to trigger overlay")
+            Log.d(TAG, "✅ Broadcast sent to trigger overlay")
             
         } catch (e: Exception) {
             Log.e(TAG, "❌ Failed to send overlay broadcast: ${e.message}")
