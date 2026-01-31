@@ -70,7 +70,10 @@ class MainActivity : FlutterActivity() {
              android.util.Log.d("StartApp", "openApp called with route: $route")
             val intent = Intent(this, MainActivity::class.java).apply {
                 // REORDER_TO_FRONT brings the activity to top without killing it
-                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or 
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP or 
+                        Intent.FLAG_ACTIVITY_NEW_TASK or
+                        Intent.FLAG_ACTIVITY_CLEAR_TOP
                 route?.let { putExtra("route", it) }
             }
             startActivity(intent)
