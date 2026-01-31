@@ -48,7 +48,13 @@ class MainActivity : FlutterActivity() {
     }
 
     override fun getInitialRoute(): String? {
-        return intent.getStringExtra("route") ?: super.getInitialRoute()
+        val route = intent.getStringExtra("route")
+        // Don't use overlay as initial route - overlay runs in separate entry point
+        if (route == "/overlay") {
+            Log.d(TAG, "⚠️ Ignoring overlay route as initial route")
+            return null
+        }
+        return route ?: super.getInitialRoute()
     }
 
     override fun onNewIntent(intent: Intent) {
