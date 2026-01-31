@@ -452,7 +452,7 @@ class _AdPlaceholder extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
-            padding: const EdgeInsets.all(18),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
               color: Colors.white.withOpacity(0.1),
               shape: BoxShape.circle,
@@ -460,15 +460,15 @@ class _AdPlaceholder extends StatelessWidget {
             child: Icon(
               Icons.play_circle_outline,
               color: Colors.white.withOpacity(0.5),
-              size: 52,
+              size: 56,
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 20),
           Text(
             "Video Ad\nPlaceholder",
             textAlign: TextAlign.center,
             style: GoogleFonts.inter(
-              fontSize: 15,
+              fontSize: 16,
               fontWeight: FontWeight.w500,
               color: Colors.white.withOpacity(0.5),
               height: 1.4,
