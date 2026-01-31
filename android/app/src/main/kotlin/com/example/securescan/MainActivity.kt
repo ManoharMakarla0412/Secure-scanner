@@ -39,6 +39,11 @@ class MainActivity : FlutterActivity() {
                     // This will be handled by CallManager in Flutter
                     result.success(true)
                 }
+                "finishActivity" -> {
+                    Log.d(TAG, "finishActivity called")
+                    finish()
+                    result.success(true)
+                }
                 else -> result.notImplemented()
             }
         }
