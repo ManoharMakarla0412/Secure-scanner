@@ -48,6 +48,17 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
   - Added protection against overlay route in onNewIntent handler
   - Enhanced debugging with detailed logging for call state transitions
 
+- **UI Redesign - Clean Light Theme Overlay**:
+  - Completely redesigned overlay to match provided mockup
+  - Clean white background with light theme
+  - Header with X close button (left) and SecureScan branding with QR icon (right)
+  - Large "Call Ended" heading with "with [Contact Name]" subtitle
+  - Two blue action buttons side by side:
+    - "Create Contact QR" - Opens QR generator for contact
+    - "Scan New Code" - Opens main app scanner
+  - Dark ad section at bottom with native video ad placeholder
+  - Full screen layout matching the mockup exactly
+
 ### Files Modified
 - `/app/lib/widgets/call_overlay_widget.dart` - Main overlay UI with action buttons
 - `/app/lib/app.dart` - Added route handling for `/create-qr`
