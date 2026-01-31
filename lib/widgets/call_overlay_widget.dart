@@ -127,21 +127,33 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   Future<void> _createContactQR() async {
     try {
-      await FlutterOverlayWindow.closeOverlay();
+      // Close overlay first
+      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+      
+      // Open main app with create-qr route
       await platform.invokeMethod('openApp', {'route': '/create-qr'});
+      
+      // Exit overlay activity
+      SystemNavigator.pop();
     } catch (e) {
       debugPrint('Error: $e');
-      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+      SystemNavigator.pop();
     }
   }
 
   Future<void> _scanNewCode() async {
     try {
-      await FlutterOverlayWindow.closeOverlay();
+      // Close overlay first
+      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+      
+      // Open main app
       await platform.invokeMethod('openApp', {'route': '/'});
+      
+      // Exit overlay activity
+      SystemNavigator.pop();
     } catch (e) {
       debugPrint('Error: $e');
-      try { await FlutterOverlayWindow.closeOverlay(); } catch (_) {}
+      SystemNavigator.pop();
     }
   }
 
