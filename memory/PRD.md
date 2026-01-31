@@ -1,11 +1,11 @@
-# SecureScan - QR & Barcode Scanner Generator
+# QR Barcode Scanner & Generator - After Call Overlay
 
 ## Original Problem Statement
 Fix the after-call overlay functionality to have complete end-to-end functionality after the overlay is working properly. The overlay should appear after calls end and provide action buttons for users.
 
 ## Architecture
 - **Platform**: Flutter/Dart mobile application (Android)
-- **UI Framework**: Material Design with glassmorphic aesthetics
+- **UI Framework**: Material Design with clean light theme
 - **Backend Services**: 
   - Firebase (Analytics, Crashlytics)
   - Google Mobile Ads
