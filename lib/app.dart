@@ -29,14 +29,20 @@ class SecureScanApp extends StatelessWidget {
            themeMode: mode, // <- controlled here
            
            onGenerateRoute: (settings) {
-             final uri = Uri.parse(settings.name ?? '');
-             if (uri.path == '/overlay') {
+             final routeName = settings.name ?? '';
+             final uri = Uri.parse(routeName);
+             
+             // Only handle overlay route if explicitly requested with full path
+             if (routeName == '/overlay' || uri.path == '/overlay') {
+               // This route should only be used for deep linking, not normal navigation
+               // The overlay widget runs in overlayMain(), not in the main app
+               print("⚠️ Overlay route requested in main app - redirecting to home");
                return MaterialPageRoute(
-                 builder: (context) => const CallOverlayWidget(),
-                 settings: settings, // Pass settings so widget receives args
+                 builder: (context) => BottomNavShell(),
+                 settings: settings,
                );
              }
-             if (uri.path == '/create-qr') {
+             if (routeName == '/create-qr' || uri.path == '/create-qr') {
                return MaterialPageRoute(
                  builder: (context) => CreateQRScreen(),
                  settings: settings,
