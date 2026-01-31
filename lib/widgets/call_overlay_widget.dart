@@ -405,31 +405,31 @@ class _ActionButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: const Color(0xFF0A66FF),
-      borderRadius: BorderRadius.circular(16),
-      elevation: 4,
+      borderRadius: BorderRadius.circular(20),
+      elevation: 6,
       shadowColor: const Color(0xFF0A66FF).withOpacity(0.4),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(20),
         child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 12),
+          padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                padding: const EdgeInsets.all(14),
+                padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(14),
+                  borderRadius: BorderRadius.circular(16),
                 ),
-                child: Icon(icon, color: Colors.white, size: 30),
+                child: Icon(icon, color: Colors.white, size: 36),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
               Text(
                 label,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.inter(
-                  fontSize: 14,
+                  fontSize: 15,
                   fontWeight: FontWeight.w600,
                   color: Colors.white,
                   height: 1.3,
