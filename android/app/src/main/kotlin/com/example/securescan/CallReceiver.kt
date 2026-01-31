@@ -24,6 +24,7 @@ class CallReceiver : BroadcastReceiver() {
 
         if (action == Intent.ACTION_NEW_OUTGOING_CALL) {
             savedNumber = intent.getStringExtra(Intent.EXTRA_PHONE_NUMBER)
+            wasInCall = true  // Outgoing call initiated
             Log.d(TAG, "Outgoing Call Saved: $savedNumber")
             return
         }
