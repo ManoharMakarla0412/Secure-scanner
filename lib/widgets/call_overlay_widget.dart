@@ -288,30 +288,59 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
             ),
           ),
           
-          // SecureScan Branding
+          // App Branding - QR Barcode Scanner & Generator
           Row(
             children: [
-              // QR Code Icon
-              Container(
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  border: Border.all(color: const Color(0xFF0A66FF), width: 2),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Icon(
-                  Icons.qr_code_2,
-                  color: const Color(0xFF0A66FF),
-                  size: 20,
+              // App Icon
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(
+                  'assets/icon/icon.png',
+                  width: 32,
+                  height: 32,
+                  errorBuilder: (context, error, stackTrace) {
+                    // Fallback QR icon if asset not found
+                    return Container(
+                      width: 32,
+                      height: 32,
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0A66FF),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(
+                        Icons.qr_code_2,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                    );
+                  },
                 ),
               ),
-              const SizedBox(width: 8),
-              Text(
-                "SecureScan",
-                style: GoogleFonts.inter(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF0A66FF),
-                ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    "QR Barcode Scanner",
+                    style: GoogleFonts.inter(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                      height: 1.2,
+                    ),
+                  ),
+                  Text(
+                    "& Generator",
+                    style: GoogleFonts.inter(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.grey.shade600,
+                      height: 1.2,
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
