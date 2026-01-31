@@ -30,12 +30,16 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   StreamSubscription<PhoneState>? _phoneStateSubscription;
   StreamSubscription? _overlaySubscription; // Add overlay subscription
   Timer? _autoDismissTimer;
+  final GlobalKey _qrKey = GlobalKey(); // Key for QR code capture
 
   
   bool _isAdLoaded = false;
   String? _phoneNumber;
   BannerAd? _bannerAd;
   bool _isBannerAdReady = false;
+  
+  // Platform channel for app launching
+  static const platform = MethodChannel('com.securescan.securescan/app');
 
   // Use Google's test banner id in debug. Replace with your real id for release.
   static const String _googleTestBannerAdUnitId =
