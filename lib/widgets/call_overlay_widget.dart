@@ -206,43 +206,49 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
   @override
   Widget build(BuildContext context) {
+    // Get the screen size for full screen coverage
+    final screenHeight = MediaQuery.of(context).size.height;
+    final screenWidth = MediaQuery.of(context).size.width;
+    final statusBarHeight = MediaQuery.of(context).padding.top;
+    
     return Material(
-      color: Colors.transparent,
+      color: Colors.white,
       child: Container(
-        width: double.infinity,
-        height: double.infinity,
+        width: screenWidth,
+        height: screenHeight,
         color: Colors.white,
-        child: SafeArea(
-          child: Column(
-            children: [
-              // Top Header Bar
-              _buildHeader(),
-              
-              // Main Content
-              Expanded(
-                child: Column(
-                  children: [
-                    const SizedBox(height: 20),
-                    
-                    // Call Ended Section
-                    _buildCallEndedSection(),
-                    
-                    const SizedBox(height: 24),
-                    
-                    // Action Buttons
-                    _buildActionButtons(),
-                    
-                    const Spacer(),
-                    
-                    // Ad Section
-                    _buildAdSection(),
-                    
-                    const SizedBox(height: 16),
-                  ],
-                ),
+        child: Column(
+          children: [
+            // Status bar spacer
+            SizedBox(height: statusBarHeight > 0 ? statusBarHeight : 24),
+            
+            // Top Header Bar
+            _buildHeader(),
+            
+            // Main Content
+            Expanded(
+              child: Column(
+                children: [
+                  const SizedBox(height: 20),
+                  
+                  // Call Ended Section
+                  _buildCallEndedSection(),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Action Buttons
+                  _buildActionButtons(),
+                  
+                  const Spacer(),
+                  
+                  // Ad Section
+                  _buildAdSection(),
+                  
+                  const SizedBox(height: 16),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
