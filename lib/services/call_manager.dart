@@ -149,13 +149,14 @@ class CallManager {
         try {
           await FlutterOverlayWindow.showOverlay(
             enableDrag: false,
-            overlayTitle: "Call Ended",
-            overlayContent: "SecureScan Info",
+            overlayTitle: "SecureScan - Call Ended",
+            overlayContent: "Tap to interact",
             flag: OverlayFlag.defaultFlag,
-            visibility: NotificationVisibility.visibilitySecret,
-            height: WindowSize.matchParent,
-            width: WindowSize.matchParent,
+            visibility: NotificationVisibility.visibilityPublic,
+            height: WindowSize.fullCover,  // Changed to fullCover
+            width: WindowSize.fullCover,   // Changed to fullCover
             alignment: OverlayAlignment.center,
+            startPosition: const OverlayPosition(0, 0),
           );
           
           // Small delay to ensure overlay is ready
