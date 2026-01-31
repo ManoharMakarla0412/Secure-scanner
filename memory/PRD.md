@@ -59,6 +59,14 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
   - Dark ad section at bottom with native video ad placeholder
   - Full screen layout matching the mockup exactly
 
+- **Full Screen Overlay Fixes (Jan 2026)**:
+  - Changed WindowSize to `fullCover` for height and `matchParent` for width
+  - Added proper status bar and bottom navigation padding
+  - Fixed SafeArea issue by manually calculating padding
+  - Updated alignment to `topCenter` with position `(0, 0)`
+  - Fixed Android manifest overlay service `foregroundServiceType` to `specialUse`
+  - Added proper `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` for Android 14+ compatibility
+
 ### Files Modified
 - `/app/lib/widgets/call_overlay_widget.dart` - Main overlay UI with action buttons
 - `/app/lib/app.dart` - Added route handling for `/create-qr`
