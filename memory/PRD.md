@@ -67,6 +67,22 @@ Fix the after-call overlay functionality to have complete end-to-end functionali
   - Fixed Android manifest overlay service `foregroundServiceType` to `specialUse`
   - Added proper `PROPERTY_SPECIAL_USE_FGS_SUBTYPE` for Android 14+ compatibility
 
+- **Call Detection - All Scenarios Covered (Jan 2026)**:
+  - ✅ Incoming call → Answer → Hang up (RINGING → OFFHOOK → IDLE)
+  - ✅ Incoming call → Reject/Decline (RINGING → IDLE)
+  - ✅ Incoming call → Missed/caller hangs up (RINGING → IDLE)
+  - ✅ Outgoing call → Connected → Hang up (OUTGOING → OFFHOOK → IDLE)
+  - ✅ Outgoing call → No answer/Busy (OUTGOING → IDLE)
+  - ✅ Outgoing call → Cancelled by user (OUTGOING → IDLE)
+  - Added `wasOutgoingCall` flag to track outgoing calls separately
+  - Fixed logic to show overlay for outgoing calls that don't connect
+
+- **Rebranding (Jan 2026)**:
+  - Changed app name from "SecureScan" to "QR Barcode Scanner & Generator"
+  - Updated overlay header with new branding (two-line text)
+  - Using app icon from `assets/QR.png` in overlay header
+  - Updated overlay notification title
+
 ### Files Modified
 - `/app/lib/widgets/call_overlay_widget.dart` - Main overlay UI with action buttons
 - `/app/lib/app.dart` - Added route handling for `/create-qr`
