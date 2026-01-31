@@ -228,7 +228,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   Widget _buildHeader() {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border(
@@ -243,10 +243,14 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
             color: Colors.transparent,
             child: InkWell(
               onTap: _closeOverlay,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.all(8),
-                child: Icon(Icons.close, color: Colors.grey.shade700, size: 26),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(Icons.close, color: Colors.grey.shade700, size: 24),
               ),
             ),
           ),
@@ -257,15 +261,15 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
             children: [
               // App Icon
               Container(
-                width: 38,
-                height: 38,
+                width: 40,
+                height: 40,
                 decoration: BoxDecoration(
                   color: const Color(0xFF0A66FF),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(Icons.qr_code_2, color: Colors.white, size: 24),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               // App Name
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -274,7 +278,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
                   Text(
                     "QR Barcode Scanner",
                     style: GoogleFonts.inter(
-                      fontSize: 14,
+                      fontSize: 15,
                       fontWeight: FontWeight.w700,
                       color: Colors.black87,
                     ),
