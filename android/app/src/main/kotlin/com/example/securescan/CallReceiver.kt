@@ -89,20 +89,27 @@ class CallReceiver : BroadcastReceiver() {
 
     private fun showOverlay(context: Context, number: String?, status: String) {
         try {
-            Log.d(TAG, "Attempting to show overlay for status: $status, number: $number")
+            Log.d(TAG, "Launching OverlayActivity for status: $status, number: $number")
             
-            // Send broadcast to MainActivity to trigger overlay via Flutter method channel
-            val broadcastIntent = Intent("com.securescan.securescan.SHOW_OVERLAY").apply {
-                setPackage(context.packageName)
-                putExtra("status", status)
-                putExtra("number", number ?: "Unknown")
-            }
-            context.sendBroadcast(broadcastIntent)
-            Log.d(TAG, "✅ Broadcast sent to trigger overlay")
+            // Launch OverlayActivity directly - bypasses Android 12+ background service restrictions
+            OverlayActivity.launch(context, number ?: "Unknown Number", status)
             
         } catch (e: Exception) {
-            Log.e(TAG, "❌ Failed to send overlay broadcast: ${e.message}")
+            Log.e(TAG, "❌ Failed to launch OverlayActivity: ${e.message}")
             e.printStackTrace()
+            
+            // Fallback: try broadcast method
+            try {
+                val broadcastIntent = Intent("com.securescan.securescan.SHOW_OVERLAY").apply {
+                    setPackage(context.packageName)
+                    putExtra("status", status)
+                    putExtra("number", number ?: "Unknown")
+                }
+                context.sendBroadcast(broadcastIntent)
+                Log.d(TAG, "Fallback broadcast sent")
+            } catch (e2: Exception) {
+                Log.e(TAG, "❌ Fallback broadcast also failed: ${e2.message}")
+            }
         }
     }
 }
