@@ -151,14 +151,14 @@ class CallManager {
 
       if (await FlutterOverlayWindow.isPermissionGranted()) {
         try {
-          // Show full screen overlay
+          // Show full screen overlay with proper configuration
           await FlutterOverlayWindow.showOverlay(
             enableDrag: false,
             overlayTitle: "QR Barcode Scanner",
             overlayContent: "Call Ended",
             flag: OverlayFlag.defaultFlag,
             visibility: NotificationVisibility.visibilityPublic,
-            positionGravity: PositionGravity.auto,
+            positionGravity: PositionGravity.none,
             height: WindowSize.fullCover,
             width: WindowSize.matchParent,
           );
