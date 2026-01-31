@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:securescan/widgets/app_drawer.dart';
 
 import 'package:securescan/features/generate/screens/generator_screen.dart';
@@ -14,16 +15,6 @@ class HomeScreen extends StatefulWidget {
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
-
-  static const _primaryBlue = Color(0xFF0A66FF);
-
-  // TODO: Replace with your real Play Store URL
-  static const String _playStoreUrl =
-      'https://play.google.com/store/apps/details?id=com.securescan.securescan';
-
-  static const String _shareMessage =
-      'I am using QR & Barcode Scanner Generator App, the fast and secure QR and Barcode reader. '
-      'Try it now! $_playStoreUrl';
 }
 
 class _HomeScreenState extends State<HomeScreen> {
@@ -48,16 +39,38 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
+
+    // Log screen view to Firebase Analytics
+    FirebaseAnalytics.instance.logScreenView(screenName: 'HomeScreen');
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Load ad once we have context/MediaQuery available
+    if (!_isBannerAdReady && _bannerAd == null) {
+      _loadBannerAd();
+    }
   }
 
   void _loadBannerAd() {
+    // Calculate 50% height based on available space
+    final mediaQuery = MediaQuery.of(context);
+    final double fullH = mediaQuery.size.height;
+    final double safeTop = mediaQuery.padding.top;
+    final double safeBottom = mediaQuery.padding.bottom;
+    final double appBarH = kToolbarHeight;
+    final double totalH = fullH - safeTop - safeBottom - appBarH;
+
+    final int adH = (totalH * 0.50).toInt();
+    final int adW = (mediaQuery.size.width - 48).toInt(); // horizontal padding 24*2
+
     // Clean up any existing ad
     _bannerAd?.dispose();
     _bannerAd = BannerAd(
       adUnitId: _adUnitId,
       request: const AdRequest(),
-      size: AdSize.banner,
+      size: AdSize(width: adW, height: adH),
       listener: BannerAdListener(
         onAdLoaded: (Ad ad) {
           debugPrint('[Ads] Banner loaded.');
@@ -104,9 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final colorScheme = Theme.of(context).colorScheme;
 
     // If banner not ready, we return a zero-height widget — nothing visible.
-    final adHeight = _isBannerAdReady && _bannerAd != null
-        ? _bannerAd!.size.height.toDouble()
-        : 0.0;
+    // (Logic moved inside LayoutBuilder)
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -124,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
         title: Text(
           'QR & Barcode Scanner Generator',
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
+          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
       body: SafeArea(
@@ -132,40 +143,48 @@ class _HomeScreenState extends State<HomeScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
             children: [
-              const SizedBox(height: 48),
-              PrimaryCTA(
-                label: 'Scan',
-                iconPath: 'assets/icons/misc/scan_qr_icon_white.png',
-                onTap: () {
-                  if (ModalRoute.of(context)?.settings.name == "ScanScreenQR") {
-                  return;
-                }
+              const Spacer(flex: 2), // ~2% top spacing
+              Expanded(
+                flex: 20, // 20% height
+                child: PrimaryCTA(
+                  label: 'Scan',
+                  iconPath: 'assets/icons/misc/scan_qr_icon_white.png',
+                  width: double.infinity,
+                  // height is controlled by Expanded -> tight constraint
+                  onTap: () {
+                    if (ModalRoute.of(context)?.settings.name == "ScanScreenQR") {
+                      return;
+                    }
 
-                Navigator.pushReplacement(
-                  context,
-                  MaterialPageRoute(
-                    settings: const RouteSettings(name: "ScanScreenQR"),
-                    builder: (_) => ScanScreenQR(),
-                  ),
-                );
-                },
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        settings: const RouteSettings(name: "ScanScreenQR"),
+                        builder: (_) => ScanScreenQR(),
+                      ),
+                    );
+                  },
+                ),
               ),
-              const SizedBox(height: 24),
-              PrimaryCTA(
-                label: 'Create QR',
-                iconPath: 'assets/icons/misc/create_qr_icon_white.png',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => CreateQRScreen()),
-                  );
-                },
+              const Spacer(flex: 2), // ~2% gap
+              Expanded(
+                flex: 20, // 20% height
+                child: PrimaryCTA(
+                  label: 'Create QR',
+                  iconPath: 'assets/icons/misc/create_qr_icon_white.png',
+                  width: double.infinity,
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => CreateQRScreen()),
+                    );
+                  },
+                ),
               ),
-              const Spacer(),
-              // --- Banner Ad spot: 0 height when not ready, ad widget when ready ---
-              SizedBox(
-                width: double.infinity,
-                height: adHeight,
+              const Spacer(flex: 4), // ~4% gap
+              // --- Banner Ad spot: Occupies 50% height ---
+              Expanded(
+                flex: 50, // 50% height
                 child: _isBannerAdReady && _bannerAd != null
                     ? Center(
                         child: SizedBox(
@@ -176,16 +195,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       )
                     : const SizedBox.shrink(),
               ),
-              const SizedBox(height: 12),
+              const Spacer(flex: 2), // ~2% bottom spacing
             ],
           ),
         ),
       ),
     );
   }
-
-  static Widget _divider() =>
-      Divider(thickness: 1, color: const Color(0xFF000000).withOpacity(0.1));
 }
 
 /// Rounded blue CTA with left icon + centered text
@@ -194,12 +210,16 @@ class PrimaryCTA extends StatelessWidget {
     required this.label,
     required this.onTap,
     required this.iconPath,
+    this.width,
+    this.height,
     super.key,
   });
 
   final String label;
   final String iconPath;
   final VoidCallback onTap;
+  final double? width;
+  final double? height;
 
   @override
   Widget build(BuildContext context) {
@@ -218,8 +238,8 @@ class PrimaryCTA extends StatelessWidget {
         ],
       ),
       child: SizedBox(
-        width: 187,
-        height: 88,
+        width: width ?? 187,
+        height: height ?? 88,
         child: ElevatedButton(
           onPressed: onTap,
           style: ElevatedButton.styleFrom(
@@ -232,13 +252,13 @@ class PrimaryCTA extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Image.asset(iconPath, width: 28, height: 28, fit: BoxFit.contain),
+              Image.asset(iconPath, width: 38, height: 38, fit: BoxFit.contain),
               const SizedBox(width: 12),
               Text(
                 label,
                 style: textTheme.labelLarge?.copyWith(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
+                  fontSize: 29,
+                  fontWeight: FontWeight.w500,
                   letterSpacing: 0.2,
                   color: Colors.white,
                 ),
@@ -247,38 +267,6 @@ class PrimaryCTA extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-/// Drawer list tile using textTheme and PNG tinting
-class _DrawerTile extends StatelessWidget {
-  const _DrawerTile({
-    required this.title,
-    required this.iconPath,
-    required this.onTap,
-    this.iconTint,
-  });
-
-  final String title;
-  final String iconPath;
-  final VoidCallback onTap;
-  final Color? iconTint;
-
-  @override
-  Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-
-    return ListTile(
-      contentPadding: const EdgeInsets.symmetric(horizontal: 24),
-      leading: Image.asset(iconPath, width: 20, height: 20, color: iconTint),
-      title: Text(
-        title,
-        style: textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w600),
-      ),
-      onTap: onTap,
-      horizontalTitleGap: 16,
-      minLeadingWidth: 28,
     );
   }
 }

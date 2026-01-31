@@ -5,6 +5,9 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:securescan/features/onboarding.screens/onboarding_screen.dart';
 import 'widgets/bottom_nav_shell.dart';
+import 'package:securescan/widgets/call_overlay_widget.dart'; // Import overlay
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class SecureScanApp extends StatelessWidget {
   const SecureScanApp({super.key});
@@ -16,12 +19,24 @@ class SecureScanApp extends StatelessWidget {
         builder: (context, mode, _) {
 
          return  MaterialApp(
+            navigatorKey: navigatorKey,
             debugShowCheckedModeBanner: false,
             title: 'QR & Barcode Scanner Generator',
             theme: SecureScanTheme.lightTheme,
             // 🌞
             darkTheme: SecureScanTheme.darkTheme,
            themeMode: mode, // <- controlled here
+           
+           onGenerateRoute: (settings) {
+             final uri = Uri.parse(settings.name ?? '');
+             if (uri.path == '/overlay') {
+               return MaterialPageRoute(
+                 builder: (context) => const CallOverlayWidget(),
+                 settings: settings, // Pass settings so widget receives args
+               );
+             }
+             return null; // Fallback to 'routes' or 'home'
+           },
 
            home: const _LaunchDecider(),
           );

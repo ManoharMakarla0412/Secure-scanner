@@ -1,41 +1,81 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:ui';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
+import 'firebase_options.dart';
+import 'package:securescan/features/scan/screens/scan_screen_qr.dart';
 import 'package:securescan/themes.dart';
+import 'package:securescan/services/call_manager.dart';
+import 'package:securescan/widgets/call_overlay_widget.dart'; // Import CallOverlayWidget
+import 'package:flutter_overlay_window/flutter_overlay_window.dart'; // Needed for overlay listener
+import 'dart:async'; // For StreamController
 import 'app.dart';
+
+// Global broadcast controller to handle overlay events safely across widget rebuilds
+final StreamController<dynamic> overlayEventController = StreamController<dynamic>.broadcast();
+bool _isOverlayListenerInitialized = false;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Disable Google Fonts network loading to prevent crashes on offline devices
-  GoogleFonts.config.allowRuntimeFetching = false;
+  // Initialize Firebase
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // Send Flutter errors to Crashlytics
+  FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
+
+  // Catch async errors
+  PlatformDispatcher.instance.onError = (error, stack) {
+    FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+    return true;
+  };
+
+  // Enable Google Fonts runtime fetching to avoid errors if assets are missing
+  GoogleFonts.config.allowRuntimeFetching = true;
 
   await MobileAds.instance.initialize();
-  await SecureScanThemeController.instance.init(); // <- add this
+  await SecureScanThemeController.instance.init();
+  await CallManager().init(); // <- Initialize CallManager
 
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
-  ]).then((_) => runApp(const SecureScanApp()));
+  ]).then((_) => runApp(RestartWidget(child: const SecureScanApp())));
 }
 
+@pragma("vm:entry-point")
+void overlayMain() {
+  WidgetsFlutterBinding.ensureInitialized();
+  
+  // Safely initialize the global listener ONCE
+  if (!_isOverlayListenerInitialized) {
+    try {
+      // Convert to broadcast stream to allow multiple listeners if needed
+      FlutterOverlayWindow.overlayListener.asBroadcastStream().listen((data) {
+        overlayEventController.add(data);
+      }, onError: (e) {
+        print("Overlay Listener Error: $e");
+      });
+      _isOverlayListenerInitialized = true;
+    } catch (e) {
+      print("Failed to listen to overlay stream (already listened?): $e");
+    }
+  }
+
+  // Needed for fonts/theme in overlay, but overlay context is limited
+  // Initialize minimal things if needed
+  runApp(
+    MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: const CallOverlayWidget(),
+      theme: SecureScanTheme.lightTheme, 
+      darkTheme: SecureScanTheme.darkTheme,
+      themeMode: ThemeMode.system, // Or force dark
+    ),
+  );
+}
 
 // AdMOB UNIT IDS
-
-// BANNER AD 1
-
-// ca-app-pub-4377808055186677~4699164078
-// ca-app-pub-4377808055186677/6096672505
-
-
-// BANNER AD 2
-// ca-app-pub-4377808055186677~4699164078
-// ca-app-pub-4377808055186677/5086843165
-
-
-// INTERSTITIAL ADS
-
-// interstitialAd1
-
-// ca-app-pub-4377808055186677~4699164078
-// ca-app-pub-4377808055186677/1969725234
+// ... (comments kept)
