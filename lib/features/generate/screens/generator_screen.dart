@@ -16,18 +16,22 @@ import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 import '../../../themes.dart';
 
 class CreateQRScreen extends StatelessWidget {
-  final List<Map<String, dynamic>> items = [
-    {'icon': Icons.content_paste, 'title': 'Content from clipboard'},
-    {'icon': Icons.link, 'title': 'URL'},
-    {'icon': Icons.text_fields, 'title': 'Text'},
-    {'icon': Icons.person_outline, 'title': 'Contact'},
-    {'icon': Icons.email_outlined, 'title': 'Email'},
-    {'icon': Icons.phone_outlined, 'title': 'Phone'},
-    {'icon': Icons.wifi, 'title': 'Wifi'},
-  ];
+  List<Map<String, dynamic>> _getItems(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return [
+      {'icon': Icons.content_paste, 'title': l10n.clipboardContent, 'key': 'Content from clipboard'},
+      {'icon': Icons.link, 'title': l10n.url, 'key': 'URL'},
+      {'icon': Icons.text_fields, 'title': l10n.text, 'key': 'Text'},
+      {'icon': Icons.person_outline, 'title': l10n.contact, 'key': 'Contact'},
+      {'icon': Icons.email_outlined, 'title': l10n.email, 'key': 'Email'},
+      {'icon': Icons.phone_outlined, 'title': l10n.phone, 'key': 'Phone'},
+      {'icon': Icons.wifi, 'title': l10n.wifi, 'key': 'Wifi'},
+    ];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -35,13 +39,16 @@ class CreateQRScreen extends StatelessWidget {
     final colorScheme = theme.colorScheme;
     final textTheme = theme.textTheme;
 
+    final l10n = AppLocalizations.of(context)!;
+    final items = _getItems(context);
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: Icon(Icons.arrow_back_ios_new, color: colorScheme.onBackground),
           onPressed: () => Navigator.pop(context),
         ),
-        title: Text("Create", style: textTheme.titleLarge),
+        title: Text(l10n.create, style: textTheme.titleLarge),
         centerTitle: true,
         backgroundColor: theme.appBarTheme.backgroundColor,
         iconTheme: theme.appBarTheme.iconTheme,
@@ -55,7 +62,7 @@ class CreateQRScreen extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             color: colorScheme.surface,
             child: Text(
-              "Create QR",
+              l10n.createQr,
               style: textTheme.bodyMedium?.copyWith(
                 color: colorScheme.onSurface,
                 fontWeight: FontWeight.w500,
@@ -70,14 +77,15 @@ class CreateQRScreen extends StatelessWidget {
               separatorBuilder: (_, __) =>
                   Divider(height: 1, color: colorScheme.outline),
               itemBuilder: (context, index) {
+                final item = items[index];
                 return ListTile(
                   leading: Icon(
-                    items[index]['icon'],
+                    item['icon'],
                     size: 26,
                     color: colorScheme.primary,
                   ),
                   title: Text(
-                    items[index]['title'],
+                    item['title'],
                     style: textTheme.bodyLarge?.copyWith(
                       color: colorScheme.onBackground,
                       fontWeight: FontWeight.w500,
@@ -92,7 +100,8 @@ class CreateQRScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => (CreateQRCodePage(
-                          selectedType: items[index]['title'],
+                          selectedType: item['key'],
+                          displayType: item['title'],
                         )),
                       ),
                     );
@@ -114,9 +123,10 @@ class CreateQRScreen extends StatelessWidget {
 }
 
 class CreateQRCodePage extends StatefulWidget {
-  const CreateQRCodePage({super.key, required this.selectedType});
+  const CreateQRCodePage({super.key, required this.selectedType, required this.displayType});
 
   final String selectedType;
+  final String displayType;
 
   @override
   State<CreateQRCodePage> createState() => _CreateQRCodePageState();
@@ -124,6 +134,7 @@ class CreateQRCodePage extends StatefulWidget {
 
 class _CreateQRCodePageState extends State<CreateQRCodePage> {
   late String selectedType = widget.selectedType;
+  late String displayType = widget.displayType;
   bool isCreated = false;
   String qrData = "";
 
@@ -255,8 +266,9 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
   // -------------------- Validation helpers --------------------
 
   // email: relaxed but practical
+  // email: standard regex
   static final RegExp _emailReg = RegExp(
-    r"^[\w\.\-+]+@[a-zA-Z0-9\.\-]+\.[a-zA-Z]{2,}$",
+    r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
   );
 
   // phone: exactly 10 digits
@@ -269,14 +281,15 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
     final name = nameController.text.trim();
     final email = emailController.text.trim();
 
-    final nameErr = name.isEmpty ? "Name is required" : null;
+    final l10n = AppLocalizations.of(context)!;
+    final nameErr = name.isEmpty ? l10n.nameRequired : null;
     final phoneErr = (_completePhoneNumber == null || !_isPhoneValid)
-        ? "Valid phone number is required"
+        ? l10n.phoneRequired
         : null;
 
     final emailErr = email.isEmpty
-        ? "Email is required"
-        : (!_emailReg.hasMatch(email) ? "Enter a valid email" : null);
+        ? l10n.emailRequired
+        : (!_emailReg.hasMatch(email) ? l10n.emailRequired : null);
 
     if (setStateErrors) {
       setState(() {
@@ -290,20 +303,42 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
     return ok;
   }
 
+  bool _validateEmail({bool setStateErrors = true}) {
+    var ok = true;
+    final email = emailController.text.trim();
+
+    String? emailErr;
+    if (email.isEmpty) {
+      emailErr = "Email is required";
+    } else if (!_emailReg.hasMatch(email)) {
+      emailErr = "Enter a valid email";
+    }
+
+    if (setStateErrors) {
+      setState(() {
+        _emailError = emailErr;
+      });
+    }
+
+    if (emailErr != null) ok = false;
+    return ok;
+  }
+
   bool _validateUrl({bool setStateErrors = true}) {
     var ok = true;
     final name = urlNameController.text.trim();
     final link = urlLinkController.text.trim();
 
-    final nameErr = name.isEmpty ? "Name is required" : null;
+    final l10n = AppLocalizations.of(context)!;
+    final nameErr = name.isEmpty ? l10n.nameRequired : null;
 
     String? linkErr;
     if (link.isEmpty) {
-      linkErr = "Link is required";
+      linkErr = l10n.linkRequired;
     } else {
       final l = link.toLowerCase();
       if (!l.contains('.') && !l.startsWith('http'))
-        linkErr = "Enter a valid link";
+        linkErr = l10n.validLinkRequired;
     }
 
     if (setStateErrors) {
@@ -322,14 +357,16 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
     final ssid = wifiNameController.text.trim();
     final pass = wifiPasswordController.text;
 
-    final ssidErr = ssid.isEmpty ? "SSID is required" : null;
+    final l10n = AppLocalizations.of(context)!;
+    final ssidErr = ssid.isEmpty ? l10n.ssidRequired : null;
 
     String? passErr;
     if (encryptionValue.toLowerCase() != 'none') {
-      if (pass.isEmpty)
-        passErr = "Password is required for selected encryption";
-      else if (pass.length < 4)
-        passErr = "Password is too short";
+      if (pass.isEmpty) {
+        passErr = l10n.passwordRequired;
+      } else if (pass.length < 8) {
+        passErr = l10n.passwordMinLength;
+      }
     }
 
     if (setStateErrors) {
@@ -448,7 +485,9 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
 
   // -------------------- Generate QR --------------------
   // NOTE: This function now shows an interstitial (if ready) before revealing the result.
-  void _generateQRCode() async {
+  Future<void> _generateQRCode() async {
+    final l10n = AppLocalizations.of(context)!;
+    String qrData = "";
     // Clear previous errors
     setState(() {
       _nameError = null;
@@ -462,7 +501,10 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
 
     if (selectedType == "Contact") {
       final ok = _validateContact();
-      if (!ok) return;
+      if (!ok) {
+        _showInlineError(AppLocalizations.of(context)!.fixErrors);
+        return;
+      }
 
       final company = companyController.text.trim();
       final designation = designationController.text.trim();
@@ -480,15 +522,19 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
       // ✅ Phone-only QR (no name/email validation)
       if (_completePhoneNumber == null || !_isPhoneValid) {
         setState(() {
-          _phoneError = "Valid phone number is required";
+          _phoneError = l10n.phoneRequired;
         });
+        _showInlineError(l10n.phoneRequired);
         return;
       }
 
       qrData = "tel:${_completePhoneNumber}";
     } else if (selectedType == "URL") {
       final ok = _validateUrl();
-      if (!ok) return;
+      if (!ok) {
+        _showInlineError(AppLocalizations.of(context)!.validLinkRequired);
+        return;
+      }
 
       var link = urlLinkController.text.trim();
       if (!link.toLowerCase().startsWith('http')) {
@@ -497,7 +543,10 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
       qrData = link;
     } else if (selectedType == "Wifi") {
       final ok = _validateWifi();
-      if (!ok) return;
+      if (!ok) {
+        _showInlineError(AppLocalizations.of(context)!.fixErrors);
+        return;
+      }
 
       final enc = encryptionValue == 'WPA/WPA2'
           ? 'WPA'
@@ -509,15 +558,16 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
         qrData = "WIFI:S:${wifiNameController.text};T:${enc};P:${pwd};;";
       }
     } else if (selectedType == "Email") {
-      if (emailController.text.isEmpty) {
-        // _showError("Email cannot be empty.");
+      final ok = _validateEmail();
+      if (!ok) {
+        _showInlineError(AppLocalizations.of(context)!.emailRequired);
         return;
       }
       qrData = "mailto:${emailController.text}";
     } else if (selectedType == "Text" ||
         selectedType == "Content from clipboard") {
       if (designationController.text.isEmpty) {
-        // _showError("Please enter text.");
+        _showInlineError(AppLocalizations.of(context)!.enterText);
         return;
       }
       qrData = designationController.text;
@@ -606,12 +656,12 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text("QR saved to ${file.path.split('/').last}"),
+          content: Text(AppLocalizations.of(context)!.qrSaved(file.path.split('/').last)),
           backgroundColor: SecureScanTheme.accentBlue,
         ),
       );
     } catch (e) {
-      _showInlineError("Error saving file: $e");
+      _showInlineError(AppLocalizations.of(context)!.errorSaving(e.toString()));
     }
   }
 
@@ -628,9 +678,9 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
       final tempDir = await getTemporaryDirectory();
       final file = await File('${tempDir.path}/shared_qr.png').create();
       await file.writeAsBytes(pngBytes);
-      await Share.shareXFiles([XFile(file.path)], text: "My generated QR Code");
+      await Share.shareXFiles([XFile(file.path)], text: AppLocalizations.of(context)!.myGeneratedQr);
     } catch (e) {
-      _showInlineError("Error sharing QR: $e");
+      _showInlineError(AppLocalizations.of(context)!.errorSharing(e.toString()));
     }
   }
 
@@ -742,6 +792,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
     final colorScheme = theme.colorScheme;
+    final l10n = AppLocalizations.of(context)!;
 
     final adHeight = _isBannerAdReady && _bannerAd != null
         ? _bannerAd!.size.height.toDouble()
@@ -757,7 +808,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          "Create QR Code",
+          l10n.createQrCode,
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         centerTitle: true,
@@ -765,7 +816,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
           // show contact picker icon only when Contact type is selected
           if (selectedType == 'Contact')
             IconButton(
-              tooltip: 'Pick contact',
+              tooltip: l10n.pickContact,
               icon: Icon(
                 Icons.contact_page_outlined,
                 color: colorScheme.onBackground,
@@ -806,6 +857,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
   // ---------------- UI helper widgets (unchanged logic, theme aware) ----------------
 
   Widget _buildInputForm(TextTheme textTheme, ColorScheme colorScheme) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -863,14 +915,14 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
 
             validator: (phone) {
               if (phone == null || phone.number.isEmpty) {
-                return 'Phone number is required';
+                return AppLocalizations.of(context)!.phoneRequired;
               }
               return null; // intl_phone_field validates length internally
             },
           ),
 
           _buildTextFieldWithError(
-            label: "Email *",
+            label: l10n.emailWithAst,
             controller: emailController,
             textTheme: textTheme,
             colorScheme: colorScheme,
@@ -878,18 +930,18 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             keyboard: TextInputType.emailAddress,
             showTrailingErrorIcon: true,
             onChanged: (_) => _onContactFieldChanged(),
-            textStyleColor: colorScheme.onBackground,
+            textStyleColor: colorScheme.onSurface,
           ),
           // optional fields
-          _buildTextField("Company", companyController, textTheme, colorScheme),
+          _buildTextField(l10n.company, companyController, textTheme, colorScheme),
           _buildTextField(
-            "Designation",
+            l10n.designation,
             designationController,
             textTheme,
             colorScheme,
           ),
           _buildTextField(
-            "Address",
+            l10n.address,
             addressController,
             textTheme,
             colorScheme,
@@ -897,7 +949,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
           ),
         ] else if (selectedType == "Email") ...[
           _buildTextField(
-            "Email *",
+            l10n.emailWithAst,
             emailController,
             textTheme,
             colorScheme,
@@ -906,7 +958,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
         ] else if (selectedType == "Text" ||
             selectedType == "Content from clipboard") ...[
           _buildTextField(
-            "Enter Text",
+            l10n.enterText,
             designationController,
             textTheme,
             colorScheme,
@@ -914,7 +966,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
         ] else if (selectedType == "Phone") ...[
           IntlPhoneField(
             decoration: InputDecoration(
-              labelText: "Phone Number *",
+              labelText: l10n.phoneNumberWithAst,
               errorText: _phoneError,
               border: const OutlineInputBorder(),
               suffixIcon: _phoneError != null
@@ -941,24 +993,24 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
 
             validator: (phone) {
               if (phone == null || phone.number.isEmpty) {
-                return 'Phone number is required';
+                return l10n.phoneRequired;
               }
               return null; // intl_phone_field validates length internally
             },
           ),
         ] else if (selectedType == "URL") ...[
           _buildTextFieldWithError(
-            label: "URL Name *",
+            label: l10n.urlNameWithAst,
             controller: urlNameController,
             textTheme: textTheme,
             colorScheme: colorScheme,
             error: _urlNameError,
             keyboard: TextInputType.text,
             onChanged: (_) => _onUrlFieldChanged(),
-            textStyleColor: colorScheme.onBackground,
+            textStyleColor: colorScheme.onSurface,
           ),
           _buildTextFieldWithError(
-            label: "URL Link *",
+            label: l10n.urlLinkWithAst,
             controller: urlLinkController,
             textTheme: textTheme,
             colorScheme: colorScheme,
@@ -966,21 +1018,21 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             keyboard: TextInputType.url,
             hint: "https://example.com",
             onChanged: (_) => _onUrlFieldChanged(),
-            textStyleColor: colorScheme.onBackground,
+            textStyleColor: colorScheme.onSurface,
           ),
         ] else ...[
           _buildTextFieldWithError(
-            label: "WiFi Name (SSID) *",
+            label: l10n.wifiNameWithAst,
             controller: wifiNameController,
             textTheme: textTheme,
             colorScheme: colorScheme,
             error: _wifiNameError,
             onChanged: (_) => _onWifiFieldChanged(),
-            textStyleColor: colorScheme.onBackground,
+            textStyleColor: colorScheme.onSurface,
           ),
           const SizedBox(height: 10),
           // Encryption dropdown
-          Text("Encryption Type *", style: textTheme.labelMedium),
+          Text(l10n.encryptionTypeWithAst, style: textTheme.labelMedium),
           const SizedBox(height: 6),
           DropdownButtonFormField<String>(
             value: encryptionValue,
@@ -1009,7 +1061,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
           ),
           const SizedBox(height: 12),
           // Password with show/hide
-          Text("Password", style: textTheme.labelMedium),
+          Text(l10n.password, style: textTheme.labelMedium),
           const SizedBox(height: 6),
           TextField(
             controller: wifiPasswordController,
@@ -1018,7 +1070,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             style: TextStyle(color: colorScheme.onBackground),
             decoration: InputDecoration(
               hintText: encryptionValue.toLowerCase() == 'none'
-                  ? "No password required"
+                  ? l10n.noPasswordRequired
                   : null,
               suffixIcon: IconButton(
                 icon: Icon(
@@ -1198,7 +1250,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
               child: Text(
                 "${f['label']}: ${f['value']}",
                 style: textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onBackground,
+                  color: colorScheme.onSurface,
                   fontWeight: FontWeight.w500,
                 ),
               ),
@@ -1252,7 +1304,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
         maxLines: maxLines,
         style:
             textStyle ??
-            TextStyle(fontSize: 18, color: colorScheme.onBackground),
+            TextStyle(fontSize: 18, color: colorScheme.onSurface),
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -1313,7 +1365,7 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
               fontSize: 18,
               color: colorStyleOrDefault(
                 textStyleColor,
-                Theme.of(context).colorScheme.onBackground,
+                Theme.of(context).colorScheme.onSurface,
               ),
             ),
             decoration: InputDecoration(

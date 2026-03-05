@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 
 class MyQrScreen extends StatefulWidget {
   const MyQrScreen({super.key});
@@ -86,8 +87,8 @@ END:VCARD
 
     if (name.isEmpty || phone.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Name and Phone are required'),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.namePhoneRequired),
         ),
       );
       return;
@@ -124,16 +125,16 @@ END:VCARD
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My QR'),
+        title: Text(l10n.myQr),
         actions: [
           if (!_isLoading && !_isEditing && _contact != null)
             IconButton(
               icon: const Icon(Icons.edit),
-              tooltip: 'Edit contact',
+              tooltip: l10n.editContact,
               onPressed: () {
                 setState(() {
                   _isEditing = true;
@@ -147,35 +148,35 @@ END:VCARD
             ? const Center(child: CircularProgressIndicator())
             : Padding(
           padding: const EdgeInsets.all(20),
-          child: _isEditing ? _buildEditForm(textTheme) : _buildQrView(textTheme),
+          child: _isEditing ? _buildEditForm(Theme.of(context).textTheme) : _buildQrView(Theme.of(context).textTheme),
         ),
       ),
     );
   }
-
   Widget _buildEditForm(TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Your Contact QR',
+            l10n.yourContactQr,
             style: textTheme.headlineSmall?.copyWith(
               fontWeight: FontWeight.w600,
-            ),
+             ),
           ),
           const SizedBox(height: 8),
           Text(
-            'Fill your contact details once. Next time you open My QR, your contact QR will be shown automatically.',
+            l10n.onboardingMyQrDesc,
             style: textTheme.bodyMedium,
           ),
           const SizedBox(height: 24),
 
           TextField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Name *',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.nameWithAst,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -183,9 +184,9 @@ END:VCARD
           TextField(
             controller: _phoneController,
             keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Phone *',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.phoneWithAst,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
@@ -193,18 +194,18 @@ END:VCARD
           TextField(
             controller: _emailController,
             keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.email,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 16),
 
           TextField(
             controller: _companyController,
-            decoration: const InputDecoration(
-              labelText: 'Company',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.company,
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 24),
@@ -213,7 +214,7 @@ END:VCARD
             width: double.infinity,
             child: ElevatedButton(
               onPressed: _saveContact,
-              child: const Text('Save & Generate QR', style: TextStyle(color: Colors.white),),
+              child: Text(l10n.saveAndGenerate, style: const TextStyle(color: Colors.white),),
             ),
           ),
         ],
@@ -222,13 +223,14 @@ END:VCARD
   }
 
   Widget _buildQrView(TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
     if (_qrData == null || _contact == null) {
       // Fallback: if something got corrupted, go back to edit mode
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Text('No contact QR found'),
+            Text(l10n.noContactQrFound),
             const SizedBox(height: 12),
             ElevatedButton(
               onPressed: () {
@@ -236,7 +238,7 @@ END:VCARD
                   _isEditing = true;
                 });
               },
-              child: const Text('Create Now'),
+              child: Text(l10n.createNow),
             ),
           ],
         ),
@@ -252,7 +254,7 @@ END:VCARD
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Text(
-          'Your Contact QR',
+          l10n.yourContactQr,
           style: textTheme.headlineSmall?.copyWith(
             fontWeight: FontWeight.w600,
           ),
@@ -338,7 +340,7 @@ END:VCARD
               });
             },
             icon: const Icon(Icons.edit),
-            label: const Text('Edit Contact'),
+            label: Text(l10n.editContact),
           ),
         ),
       ],

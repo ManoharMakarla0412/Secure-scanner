@@ -28,13 +28,18 @@ import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:native_device_orientation/native_device_orientation.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import 'package:securescan/features/scan/screens/qr_result_screen.dart';
 import 'package:securescan/widgets/app_drawer.dart';
+import 'package:securescan/widgets/bottom_nav_shell.dart';
+import 'package:securescan/app.dart';
 
 class ScanScreenQR extends StatefulWidget {
   const ScanScreenQR({Key? key}) : super(key: key);
@@ -100,7 +105,7 @@ class _Payload {
 // -------------------- Screen --------------------
 
 class _ScanScreenQRState extends State<ScanScreenQR>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const Color _brandBlue = Color(0xFF0A66FF);
   static const _prefsKey = 'scan_history';
   static const _historyCap = 200;
@@ -123,10 +128,10 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   // Scanner controller
   final MobileScannerController _cameraController = MobileScannerController(
     facing: CameraFacing.back,
-    detectionSpeed: DetectionSpeed.normal,
-    detectionTimeoutMs: 250,
+    detectionSpeed: DetectionSpeed.unrestricted,
+    detectionTimeoutMs: 100,
     returnImage: true,
-    autoStart: false, // 🔥 IMPORTANT
+    autoStart: true,
   );
 
   final ImagePicker _picker = ImagePicker();
@@ -136,7 +141,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   bool _isProcessing = false;
   Map<String, dynamic>? _parsedJson;
   Uint8List? _lastImageBytes;
-  Timer? _scanTimeoutTimer;
 
   // Sweep animation
   late final AnimationController _sweepController;
@@ -158,7 +162,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
   String get _interstitialAdUnitId => kDebugMode
       ? _googleTestInterstitialAdUnitId
-      : _productionInterstitialAdUnitId;
+      : _productionInterstitialAdUnitId;             
 
   // --------- Banner Ad Fields ----------
   BannerAd? _bannerAd;
@@ -186,16 +190,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
     // Lock to portrait while scanning
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    _scanTimeoutTimer = Timer(const Duration(seconds: 12), () async {
-      if (!mounted || _isProcessing) return;
-
-      final prefs = await SharedPreferences.getInstance();
-      final hasAnyData = prefs.getKeys().isNotEmpty;
-
-      if (hasAnyData) {
-        _showScanFailureDialog();
-      }
-    });
     _sweepController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
@@ -206,24 +200,83 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     _loadInterstitial();
     _loadBannerAd();
 
-    // ✅ Start camera AFTER UI is ready
+    // Start camera (autoStart handles initial start, but this ensures it's running)
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        await _cameraController.start();
+        if (!_cameraController.value.isInitialized) {
+          final status = await Permission.camera.request();
+          if (status.isDenied || status.isPermanentlyDenied) {
+            _showIssueDialog(
+              AppLocalizations.of(context)!.cameraPermissionRequired,
+              actionText: AppLocalizations.of(context)!.openSettings,
+              onAction: () => openAppSettings(),
+            );
+            return;
+          }
+          await _cameraController.start();
+        }
+        //_checkAndShowFocusToast();
       } catch (e) {
         debugPrint('Camera start failed: $e');
+        // if (mounted) {
+        //   _showIssueDialog(AppLocalizations.of(context)!.cameraNotWorking);
+        // }
       }
     });
+
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    if (!_cameraController.value.isInitialized) return;
+
+    switch (state) {
+      case AppLifecycleState.paused:
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.detached:
+        _cameraController.stop();
+        break;
+      case AppLifecycleState.resumed:
+        _cameraController.start();
+        break;
+      case AppLifecycleState.inactive:
+        // Keep camera running on inactive (e.g. notification shade) to avoid black screen
+        break;
+    }
+  }
+
+  Future<void> _checkAndShowFocusToast() async {
+    final prefs = await SharedPreferences.getInstance();
+    final hasShown = prefs.getBool('first_scan_toast_shown') ?? false;
+    if (!hasShown) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.cameraNotWorking),
+          duration: const Duration(seconds: 4),
+          backgroundColor: Colors.redAccent,
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {},
+          ),
+        ),
+      );
+      await prefs.setBool('first_scan_toast_shown', true);
+    }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sweepController.dispose();
     _cameraController.dispose();
 
     _interstitialAd?.dispose();
     _bannerAd?.dispose();
-    _scanTimeoutTimer?.cancel();
 
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
@@ -292,38 +345,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     );
   }
 
-  void _showScanFailureDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          title: const Text('Camera issue'),
-          content: const Text(
-            'Camera is unable to scan.\n\n'
-            'Please restart the app to continue scanning.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pop();
-                RestartWidget.restartApp(context);
-              },
-              child: const Text('Restart app'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
   Future<void> _showInterstitialThenNavigate(QrResultData result) async {
     // Log scan event to Firebase Analytics
     FirebaseAnalytics.instance.logEvent(
@@ -357,45 +378,26 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         timeout.cancel();
 
         if (!mounted) return;
-        Navigator.of(context)
-            .push(
-              MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-            )
-            .then((_) async {
-              // When coming back, resume scanning
-              _lastScanned = null;
-              _lastImageBytes = null;
-              await _cameraController.start();
-            });
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
+        );
       } catch (e) {
         debugPrint(
           '[Ads] Error showing interstitial: $e — navigating immediately.',
         );
         if (!mounted) return;
-        Navigator.of(context)
-            .push(
-              MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-            )
-            .then((_) async {
-              _scanTimeoutTimer?.cancel(); // ✅ ADD HERE
-
-              _lastScanned = null;
-              _lastImageBytes = null;
-              await _cameraController.start();
-            });
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
+        );
       }
     } else {
       // No interstitial ready — fall back to immediate navigation
       if (!mounted) return;
-      Navigator.of(context)
-          .push(
-            MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-          )
-          .then((_) async {
-            _lastScanned = null;
-            _lastImageBytes = null;
-            await _cameraController.start();
-          });
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
+      );
     }
   }
 
@@ -435,33 +437,16 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
   // -------------------- Detect & handle --------------------
 
-  bool _showSafeScan = false;
-
   void _onDetect(BarcodeCapture capture) async {
-    _scanTimeoutTimer?.cancel();
-
     if (_isProcessing || capture.barcodes.isEmpty) return;
-
     _isProcessing = true;
 
     final picked = capture.barcodes.first;
     final imageBytes = capture.image;
 
-    // Show Safe Scan overlay
-    setState(() {
-      _showSafeScan = true;
-    });
-
-    // Pause scanning animation (UX-friendly)
-    await Future.delayed(const Duration(seconds: 3));
-
     if (!mounted) return;
 
-    setState(() {
-      _showSafeScan = false;
-    });
-
-    // Proceed with normal flow
+    // Proceed immediately with normal flow
     await _handleBarcode(picked, imageBytes);
   }
 
@@ -598,8 +583,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
       _parsedJson = null;
     }
 
-    await Future.delayed(const Duration(milliseconds: 200));
-    await _cameraController.stop();
+    // We don't stop the camera here anymore to avoid black frames.
+    // Instead, _isProcessing guard at the top of _onDetect handles it.
+    // await _cameraController.stop();
 
     // Classify payload
     final payload = _classifyPayload(raw, symbology: barcode.format.name);
@@ -643,8 +629,163 @@ class _ScanScreenQRState extends State<ScanScreenQR>
       timestamp: payload.ts,
     );
 
+    // --- [NEW] Mock Security Check for Risky URLs ---
+    if (payload.kind == _PayloadKind.url) {
+      final isRisky = raw.contains('bit.ly') ||
+          raw.contains('t.co') ||
+          raw.contains('tinyurl.com') ||
+          raw.contains('goo.gl');
+      if (isRisky) {
+        await _showIssueDialog(
+          'Security Warning: This shortened URL might lead to a suspicious website. Please scan with caution.',
+        );
+      }
+    }
+
     // --- show interstitial (if ready) and then navigate ---
     await _showInterstitialThenNavigate(result);
+  }
+
+  // --- [NEW] Issue Dialog with Black Screen Background ---
+  Future<void> _showIssueDialog(
+    String message, {
+    String? actionText,
+    VoidCallback? onAction,
+  }) async {
+    if (!mounted) return;
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    await showGeneralDialog(
+      context: context,
+      barrierColor: Colors.transparent, // No black screen/overlay
+      barrierDismissible: true,
+      barrierLabel: 'Scan Issue',
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, animation, secondaryAnimation) {
+        return FadeTransition(
+          opacity: animation,
+          child: ScaleTransition(
+            scale: animation,
+            child: Center(
+              child: Material(
+                color: Colors.transparent,
+                child: Container(
+                  width: MediaQuery.of(context).size.width * 0.85,
+                  padding: const EdgeInsets.all(28),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
+                    borderRadius: BorderRadius.circular(28),
+                    border: Border.all(
+                      color: Colors.redAccent.withOpacity(0.3),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.15),
+                        blurRadius: 40,
+                        spreadRadius: 2,
+                      )
+                    ],
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: Colors.redAccent.withOpacity(0.15),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.error_outline_rounded,
+                          color: Colors.redAccent,
+                          size: 42,
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      Text(
+                        'SCANNING ISSUE',
+                        style: GoogleFonts.outfit(
+                          color: isDark ? Colors.white : Colors.black87,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        message,
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.inter(
+                          color: isDark ? Colors.white.withOpacity(0.75) : Colors.black54,
+                          fontSize: 16,
+                          height: 1.6,
+                        ),
+                      ),
+                      const SizedBox(height: 32),
+                      if (actionText != null && onAction != null) ...[
+                        SizedBox(
+                          width: double.infinity,
+                          height: 54,
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _brandBlue,
+                              foregroundColor: Colors.white,
+                              elevation: 0,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.of(context).pop();
+                              onAction();
+                            },
+                            child: Text(
+                              actionText.toUpperCase(),
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      SizedBox(
+                        width: double.infinity,
+                        height: 54,
+                        child: OutlinedButton(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: isDark ? Colors.white60 : Colors.black54,
+                            side: BorderSide(
+                              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(
+                            AppLocalizations.of(context)!.close.toUpperCase(),
+                            style: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   // Scan from gallery
@@ -661,9 +802,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
       if (capture == null || capture.barcodes.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('No code found in this image')),
-          );
+          _showIssueDialog(AppLocalizations.of(context)!.noCodeFound);
         }
         setState(() => _isProcessing = false);
         return;
@@ -676,11 +815,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
       final barcode = capture.barcodes.first;
       await _handleBarcode(barcode, frameBytes);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to scan image: $e')));
-      }
+      // if (mounted) {
+      //   _showIssueDialog(AppLocalizations.of(context)!.failedToScan(e.toString()));
+      // }
       setState(() => _isProcessing = false);
     }
   }
@@ -846,7 +983,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         : 0.0;
 
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: const AppDrawer(),
       body: Stack(
         children: [
@@ -1000,7 +1137,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
           Positioned(
             left: 0,
             right: 0,
-            bottom: 140 + (adHeight > 0 ? adHeight - 12 : 0),
+            bottom: 130 + (adHeight > 0 ? adHeight - 12 : 0),
             child: const _HintBubble(text: 'Point camera at a code to scan'),
           ),
 
@@ -1077,16 +1214,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                   )
                 : const SizedBox.shrink(),
           ),
-          // 🔝 Safe Scan overlay (must be topmost)
-          if (_showSafeScan)
-            Positioned.fill(
-              child: AbsorbPointer(
-                child: Container(
-                  color: Colors.black.withOpacity(0.55),
-                  child: Center(child: _SafeScanOverlay()),
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -1211,56 +1338,4 @@ class _CornerPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _CornerPainter old) =>
       old.color != color || old.thickness != thickness;
-}
-
-class _SafeScanOverlay extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 26, vertical: 22),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 24)],
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          CircularProgressIndicator(strokeWidth: 3),
-          SizedBox(height: 14),
-          Text(
-            'Safe scan in progress',
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class RestartWidget extends StatefulWidget {
-  final Widget child;
-  const RestartWidget({Key? key, required this.child}) : super(key: key);
-
-  static void restartApp(BuildContext context) {
-    context.findAncestorStateOfType<_RestartWidgetState>()?.restartApp();
-  }
-
-  @override
-  State<RestartWidget> createState() => _RestartWidgetState();
-}
-
-class _RestartWidgetState extends State<RestartWidget> {
-  Key _key = UniqueKey();
-
-  void restartApp() {
-    setState(() {
-      _key = UniqueKey();
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return KeyedSubtree(key: _key, child: widget.child);
-  }
 }

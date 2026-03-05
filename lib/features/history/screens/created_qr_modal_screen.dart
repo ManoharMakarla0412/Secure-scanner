@@ -9,6 +9,8 @@ import 'package:flutter/rendering.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 
 import '../../../themes.dart';
 
@@ -41,6 +43,54 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
   final GlobalKey _repaintKey = GlobalKey();
   bool _working = false;
 
+  // ---- Banner Ad ----
+  BannerAd? _bannerAd;
+  bool _isBannerAdReady = false;
+  static const String _googleTestBannerAdUnitId =
+      'ca-app-pub-3940256099942544/6300978111';
+  static const String _productionBannerAdUnitId =
+      'ca-app-pub-2961863855425096/5968213716';
+
+  String get _adUnitId =>
+      kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
+
+  int _loadAttempts = 0;
+  static const int _maxLoadAttempts = 3;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBannerAd();
+  }
+
+  void _loadBannerAd() {
+    _bannerAd?.dispose();
+    _bannerAd = BannerAd(
+      adUnitId: _adUnitId,
+      request: const AdRequest(),
+      size: AdSize.mediumRectangle,
+      listener: BannerAdListener(
+        onAdLoaded: (_) => setState(() => _isBannerAdReady = true),
+        onAdFailedToLoad: (ad, error) {
+          ad.dispose();
+          _isBannerAdReady = false;
+          if (++_loadAttempts <= _maxLoadAttempts) {
+            Future.delayed(
+              Duration(seconds: 1 << (_loadAttempts - 1)),
+              _loadBannerAd,
+            );
+          }
+        },
+      ),
+    )..load();
+  }
+
+  @override
+  void dispose() {
+    _bannerAd?.dispose();
+    super.dispose();
+  }
+
   // Capture the RepaintBoundary as PNG bytes
   Future<Uint8List?> _capturePngBytes() async {
     try {
@@ -68,7 +118,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     if (bytes == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to capture image')),
+           SnackBar(content: Text(AppLocalizations.of(context)!.failedToCapture)),
         );
       }
       setState(() => _working = false);
@@ -84,14 +134,14 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
+        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.qrSaved(file.path))));
       }
     } catch (e) {
       if (kDebugMode) print('save error: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error saving image: $e')));
+        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.errorSaving(e.toString()))));
       }
     } finally {
       setState(() => _working = false);
@@ -105,7 +155,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     if (bytes == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Failed to capture image')),
+           SnackBar(content: Text(AppLocalizations.of(context)!.failedToCapture)),
         );
       }
       setState(() => _working = false);
@@ -119,13 +169,17 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
       );
       await file.writeAsBytes(bytes);
 
-      await Share.shareXFiles([XFile(file.path)], text: '${widget.type} QR');
+      await Share.shareXFiles(
+        [XFile(file.path)],
+        text:
+            '${widget.type} QR\n\nScanned with Secure Scanner: https://play.google.com/store/apps/details?id=com.securescan.securescan',
+      );
     } catch (e) {
       if (kDebugMode) print('share error: $e');
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Error sharing image: $e')));
+        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.errorSharing(e.toString()))));
       }
     } finally {
       setState(() => _working = false);
@@ -204,7 +258,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     final val = widget.value;
     if (t == 'contact' || t == 'vcard' || t == 'mecard') {
       final c = _parseContact(val);
-      final name = c['name']?.isNotEmpty == true ? c['name']! : 'Contact';
+      final name = c['name']?.isNotEmpty == true ? c['name']! : AppLocalizations.of(context)!.contact;
       final tel = c['tel']?.isNotEmpty == true ? c['tel']! : '';
       if (tel.isNotEmpty) return '$name • $tel';
       return name;
@@ -223,7 +277,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
+    final size = MediaQuery.of(context).size;
     final displayShort = _displayShort();
 
     return Scaffold(
@@ -233,7 +287,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
         elevation: 1,
         centerTitle: true,
         title: Text(
-          widget.type,
+          _translateType(context, widget.type),
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
         leading: IconButton(
@@ -244,20 +298,27 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            const SizedBox(height: 16),
+            SizedBox(height: size.height * 0.02), // 2% top spacing
 
             Expanded(
               child: SingleChildScrollView(
-                child: Column(
-                  children: [
+                child: Container(
+                  // Ensure container takes full height if content is small, to center vertically if needed
+                  constraints: BoxConstraints(
+                    minHeight: size.height * 0.5,
+                  ),
+                  alignment: Alignment.center,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
                     // QR container (captured for saving/sharing)
                     RepaintBoundary(
                       key: _repaintKey,
                       child: Container(
-                        margin: const EdgeInsets.symmetric(horizontal: 50),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 30,
-                          horizontal: 40,
+                        margin: EdgeInsets.symmetric(horizontal: size.width * 0.1), // 10% margin
+                        padding: EdgeInsets.symmetric(
+                          vertical: size.height * 0.03, // 3% vertical padding
+                          horizontal: size.width * 0.08, // 8% horizontal padding
                         ),
                         decoration: BoxDecoration(
                           color: SecureScanTheme.accentBlue,
@@ -266,29 +327,29 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                         child: Column(
                           children: [
                             Text(
-                              'YOUR QR CODE',
+                              AppLocalizations.of(context)!.yourQrCode,
                               style: textTheme.titleLarge?.copyWith(
                                 color: Colors.white,
                                 fontWeight: FontWeight.bold,
                                 letterSpacing: 1,
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            SizedBox(height: size.height * 0.02),
                             Container(
-                              width: 260,
-                              height: 260,
+                              width: size.width * 0.45, // 45% of screen width
+                              height: size.width * 0.45,
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(12),
                               ),
-                              padding: const EdgeInsets.all(12),
+                              padding: EdgeInsets.all(size.width * 0.03),
                               child: QrImageView(
                                 data: widget.value,
                                 version: QrVersions.auto,
                                 backgroundColor: Colors.white,
                               ),
                             ),
-                            const SizedBox(height: 18),
+                            SizedBox(height: size.height * 0.02),
                             // simplified display text (name + phone for contact, ssid for wifi, url for url)
                             Padding(
                               padding: const EdgeInsets.symmetric(
@@ -315,11 +376,11 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                       ),
                     ),
 
-                    const SizedBox(height: 22),
+                    SizedBox(height: size.height * 0.03),
 
                     // Buttons row (icons + labels)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+                      padding: EdgeInsets.symmetric(horizontal: size.width * 0.05),
                       child: Row(
                         children: [
                           Expanded(
@@ -338,15 +399,15 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                                       size: 18,
                                       color: Colors.white,
                                     ),
-                              label: const Text(
-                                'SAVE',
-                                style: TextStyle(color: Colors.white),
+                              label: Text(
+                                AppLocalizations.of(context)!.save.toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
                               ),
                               onPressed: _working ? null : _saveToDocuments,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: SecureScanTheme.accentBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
+                                padding: EdgeInsets.symmetric(
+                                  vertical: size.height * 0.018,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
@@ -362,15 +423,15 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                                 size: 18,
                                 color: Colors.white,
                               ),
-                              label: const Text(
-                                'SHARE',
-                                style: TextStyle(color: Colors.white),
+                              label: Text(
+                                AppLocalizations.of(context)!.share.toUpperCase(),
+                                style: const TextStyle(color: Colors.white),
                               ),
                               onPressed: _working ? null : _shareImage,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: SecureScanTheme.accentBlue,
-                                padding: const EdgeInsets.symmetric(
-                                  vertical: 14,
+                                padding: EdgeInsets.symmetric(
+                                  vertical: size.height * 0.018,
                                 ),
                                 shape: RoundedRectangleBorder(
                                   borderRadius: BorderRadius.circular(10),
@@ -389,21 +450,53 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                 ),
               ),
             ),
+          ),
 
-            // Banner-style ad slot at bottom: grey background, white text
-            Container(
-              width: double.infinity,
-              height: 70,
-              color: Colors.grey.shade800, // darker grey for banner look
-              alignment: Alignment.center,
-              child: Text(
-                'AD BANNER',
-                style: textTheme.bodyMedium?.copyWith(color: Colors.white),
-              ),
-            ),
+            // Banner-style ad slot at bottom
+            if (_isBannerAdReady && _bannerAd != null)
+              Container(
+                width: double.infinity,
+                height: _bannerAd!.size.height.toDouble(),
+                alignment: Alignment.center,
+                child: AdWidget(ad: _bannerAd!),
+              )
+            else
+              const SizedBox.shrink(),
           ],
         ),
       ),
     );
+  }
+
+  String _translateType(BuildContext context, String type) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (type.toLowerCase()) {
+      case 'url':
+        return l10n.url;
+      case 'phone':
+        return l10n.phone;
+      case 'email':
+        return l10n.email;
+      case 'wifi':
+      case 'wi-fi':
+        return l10n.wifi;
+      case 'contact':
+      case 'vcard':
+      case 'mecard':
+        return l10n.contact;
+      case 'calendar':
+        return l10n.calendar;
+      case 'location':
+      case 'geo':
+        return l10n.location;
+      case 'json':
+        return l10n.json;
+      case 'text':
+      case 'content':
+      case 'content from clipboard':
+        return l10n.content;
+      default:
+        return type;
+    }
   }
 }

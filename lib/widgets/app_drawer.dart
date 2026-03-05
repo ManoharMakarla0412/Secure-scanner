@@ -16,6 +16,7 @@ import 'package:securescan/features/generate/screens/generator_screen.dart';
 import 'package:securescan/features/generate/screens/my_qr_screen.dart';
 
 import '../features/scan/screens/qr_result_screen.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 import 'package:securescan/themes.dart'; // <-- needed for SecureScanThemeController
 
 class AppDrawer extends StatelessWidget {
@@ -38,13 +39,10 @@ class AppDrawer extends StatelessWidget {
   static const String _playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.securescan.securescan';
 
-  static const String _shareMessage =
-      'I am using QR & Barcode Scanner Generator App, the fast and secure QR and Barcode reader. '
-      'Try it now! $_playStoreUrl';
-
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final l10n = AppLocalizations.of(context)!;
     final width = MediaQuery.of(context).size.width * 0.66;
 
     return Drawer(
@@ -80,7 +78,7 @@ class AppDrawer extends StatelessWidget {
                   const SizedBox(width: 16),
                   Expanded(
                     child: Text(
-                      'QR & Barcode Scanner Generator',
+                      l10n.copyright,
                       style: textTheme.headlineSmall?.copyWith(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
@@ -94,7 +92,7 @@ class AppDrawer extends StatelessWidget {
 
             // ---- Home (BottomNav index: 0) ----
             _DrawerTile(
-              title: 'Home',
+              title: l10n.home,
               iconPath: 'assets/icons/bottom_nav_icons/home_inactive.png',
               iconTint: currentBottomIndex == 0
                   ? _primaryBlue
@@ -110,7 +108,7 @@ class AppDrawer extends StatelessWidget {
 
             // Scan QR (camera)
             _DrawerTile(
-              title: 'Scan QR',
+              title: l10n.scanQr,
               iconPath: 'assets/icons/misc/scan_qr_icon_white.png',
               iconTint: _primaryBlue,
               onTap: () {
@@ -135,7 +133,7 @@ class AppDrawer extends StatelessWidget {
 
             // Scan Image (from gallery) — perform inline pick + analyze and navigate to QrResultScreen when detected
             _DrawerTile(
-              title: 'Scan Image',
+              title: l10n.scanImage,
               iconPath: 'assets/icons/misc/scan_image_icon.png',
               iconTint: _primaryBlue,
               // Replace the existing Scan Image onTap handler with this:
@@ -206,9 +204,9 @@ class AppDrawer extends StatelessWidget {
 
                     if (value.isEmpty) {
                       messenger.showSnackBar(
-                        const SnackBar(
+                        SnackBar(
                           content: Text(
-                            'QR / Barcode detected, but has no data.',
+                            l10n.noCodeFound,
                           ),
                         ),
                       );
@@ -233,8 +231,8 @@ class AppDrawer extends StatelessWidget {
                     );
                   } else {
                     messenger.showSnackBar(
-                      const SnackBar(
-                        content: Text('No QR / Barcode found in this image.'),
+                      SnackBar(
+                        content: Text(l10n.noCodeFound),
                       ),
                     );
                   }
@@ -247,7 +245,7 @@ class AppDrawer extends StatelessWidget {
                   } catch (_) {}
 
                   messenger.showSnackBar(
-                    SnackBar(content: Text('Failed to scan image: $e')),
+                    SnackBar(content: Text(l10n.failedToScan(e.toString()))),
                   );
                 } finally {
                   controller.dispose();
@@ -258,7 +256,7 @@ class AppDrawer extends StatelessWidget {
 
             // Create QR
             _DrawerTile(
-              title: 'Create QR',
+              title: l10n.createQr,
               iconPath: 'assets/icons/misc/create_qr_icon_white.png',
               iconTint: _primaryBlue,
               onTap: () {
@@ -273,7 +271,7 @@ class AppDrawer extends StatelessWidget {
 
             // My QR (saved contact QR)
             _DrawerTile(
-              title: 'My QR',
+              title: l10n.myQr,
               iconPath: 'assets/icons/misc/my_qr_icon.png',
               iconTint: _primaryBlue,
               onTap: () {
@@ -288,7 +286,7 @@ class AppDrawer extends StatelessWidget {
 
             // History (BottomNav index: 1)
             _DrawerTile(
-              title: 'History',
+              title: l10n.history,
               iconPath: 'assets/icons/misc/history_App Drawer_icon.png',
               iconTint: _primaryBlue,
               onTap: () {
@@ -305,7 +303,7 @@ class AppDrawer extends StatelessWidget {
 
             // Settings (BottomNav index: 2)
             _DrawerTile(
-              title: 'Settings',
+              title: l10n.settingsTitle,
               iconPath: 'assets/icons/bottom_nav_icons/settings_inactive.png',
               iconTint: _primaryBlue,
               onTap: () {
@@ -322,19 +320,19 @@ class AppDrawer extends StatelessWidget {
 
             // Share App
             _DrawerTile(
-              title: 'Share App',
+              title: l10n.shareApp,
               iconPath: 'assets/icons/misc/share_icon.png',
               iconTint: _primaryBlue,
               onTap: () async {
                 Navigator.of(context).pop();
-                await Share.share(_shareMessage);
+                await Share.share(l10n.shareMessage(_playStoreUrl));
               },
             ),
             _divider(),
 
             // Change Theme (toggle light/dark)
             _DrawerTile(
-              title: 'Change Theme',
+              title: l10n.changeTheme,
               iconPath: 'assets/icons/misc/theme_icon.png',
               iconTint: _primaryBlue,
               onTap: () async {
@@ -368,7 +366,7 @@ class AppDrawer extends StatelessWidget {
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text(
-                      'Theme set to ${SecureScanThemeController.themeModeToString(newMode)}',
+                      l10n.themeSetTo(_translateThemeMode(context, SecureScanThemeController.themeModeToString(newMode))),
                     ),
                     behavior: SnackBarBehavior.floating,
                     backgroundColor: _primaryBlue,
@@ -382,6 +380,20 @@ class AppDrawer extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String _translateThemeMode(BuildContext context, String mode) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (mode) {
+      case 'Light':
+        return l10n.light;
+      case 'Dark':
+        return l10n.dark;
+      case 'System Mode':
+        return l10n.systemMode;
+      default:
+        return mode;
+    }
   }
 
   static Widget _divider() => Divider(

@@ -4,7 +4,12 @@ import 'package:securescan/themes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:securescan/features/onboarding.screens/onboarding_screen.dart';
+import 'package:securescan/services/language_service.dart';
+import 'package:securescan/l10n/app_localizations.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'widgets/bottom_nav_shell.dart';
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 class SecureScanApp extends StatelessWidget {
   const SecureScanApp({super.key});
@@ -13,20 +18,30 @@ class SecureScanApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: SecureScanThemeController.instance.themeModeNotifier,
-        builder: (context, mode, _) {
-
-         return  MaterialApp(
-            debugShowCheckedModeBanner: false,
-            title: 'QR & Barcode Scanner Generator',
-            theme: SecureScanTheme.lightTheme,
-            // 🌞
-            darkTheme: SecureScanTheme.darkTheme,
-           themeMode: mode, // <- controlled here
-
-           home: const _LaunchDecider(),
-          );
-        }
-
+      builder: (context, mode, _) {
+        return ValueListenableBuilder<Locale>(
+          valueListenable: LanguageController.instance.localeNotifier,
+          builder: (context, locale, _) {
+            return MaterialApp(
+              navigatorKey: navigatorKey,
+              debugShowCheckedModeBanner: false,
+              title: 'QR & Barcode Scanner Generator',
+              theme: SecureScanTheme.lightTheme,
+              darkTheme: SecureScanTheme.darkTheme,
+              themeMode: mode,
+              locale: locale,
+              localizationsDelegates: const [
+                AppLocalizations.delegate,
+                GlobalMaterialLocalizations.delegate,
+                GlobalWidgetsLocalizations.delegate,
+                GlobalCupertinoLocalizations.delegate,
+              ],
+              supportedLocales: AppLocalizations.supportedLocales,
+              home: const _LaunchDecider(),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -14,9 +14,13 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:intl/intl.dart';
+import 'package:securescan/services/language_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 
+import '../../../widgets/bottom_nav_shell.dart';
 import 'scan_screen_qr.dart'; // for QrResultData model
 
 class QrResultScreen extends StatelessWidget {
@@ -93,7 +97,43 @@ class QrResultScreen extends StatelessWidget {
       appBar: AppBar(
         backgroundColor: _primaryBlue,
         foregroundColor: Colors.white,
-        title: const Text('Scan result', style: TextStyle(color: Colors.white)),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const BottomNavShell()),
+              (route) => false,
+            );
+          },
+        ),
+        title: Text(AppLocalizations.of(context)!.scanResult, style: const TextStyle(color: Colors.white)),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.greenAccent.withOpacity(0.5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified, color: Colors.greenAccent, size: 16),
+                SizedBox(width: 6),
+                Text(
+                  AppLocalizations.of(context)!.safeScan,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -101,9 +141,11 @@ class QrResultScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _headerCard(textTheme),
+              _securityStatus(context, textTheme),
               const SizedBox(height: 16),
-              _valueCard(textTheme),
+              _headerCard(context, textTheme),
+              const SizedBox(height: 16),
+              _valueCard(context, textTheme),
               const SizedBox(height: 16),
               _ctaRow(context, textTheme),
               const SizedBox(height: 16),
@@ -118,10 +160,41 @@ class QrResultScreen extends StatelessWidget {
     );
   }
 
-  // -------------------- Header --------------------
+  // -------------------- Security Status --------------------
+  
+  Widget _securityStatus(BuildContext context, TextTheme textTheme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withOpacity(0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined, color: Colors.green, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              AppLocalizations.of(context)!.securityVerified,
+              style: const TextStyle(
+                color: Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-  Widget _headerCard(TextTheme textTheme) {
-    final typeLabel = _typeLabel();
+  // -------------------- Header --------------------
+ 
+  Widget _headerCard(BuildContext context, TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
+    final typeLabel = _typeLabel(context);
     final formatLabel = result.format ?? 'Unknown format';
     final timeStr = _formatTimestamp(result.timestamp);
 
@@ -159,88 +232,91 @@ class QrResultScreen extends StatelessWidget {
       }
     }
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: _primaryBlue.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: _primaryBlue.withOpacity(0.4)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              color: _primaryBlue,
-              borderRadius: BorderRadius.circular(10),
+    return InkWell(
+      onTap: () {
+        if (_isUrl) {
+          _onOpenUrl(context);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _primaryBlue.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _primaryBlue.withOpacity(0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _primaryBlue,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(leadingIcon, color: Colors.white),
             ),
-            child: Icon(leadingIcon, color: Colors.white),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  typeLabel,
-                  style: textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: _primaryBlue,
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _typeLabel(context) + (_isUrl ? ' (Tap to open)' : ''),
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: _primaryBlue,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  '$timeStr • $formatLabel',
-                  style: textTheme.bodySmall?.copyWith(
-                    color: Colors.grey.shade700,
+                  const SizedBox(height: 2),
+                  Text(
+                    '$timeStr • $formatLabel',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade700,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  String _typeLabel() {
+  String _typeLabel(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     // If it's an ISBN, prefer "Book"
     final isIsbn = (result.data?['isIsbn'] == true);
-    if (isIsbn) return 'Book';
+    if (isIsbn) return l10n.book;
 
-    if (_isProduct) return 'Product';
+    if (_isProduct) return l10n.product;
 
     switch (result.kind) {
       case 'url':
-        return 'Website';
+        return l10n.website;
       case 'phone':
-        return 'Phone number';
+        return l10n.phoneNumber;
       case 'email':
-        return 'Email address';
+        return l10n.emailAddress;
       case 'wifi':
-        return 'Wi-Fi network';
+        return l10n.wifiNetwork;
       case 'vcard':
-        return 'Contact';
+        return l10n.contact;
       case 'calendar':
-        return 'Calendar event';
+        return l10n.calendarEvent;
       case 'geo':
-        return 'Location';
+        return l10n.location;
       case 'json':
-        return 'JSON data';
+        return l10n.jsonData;
       default:
-        return 'Content';
+        return l10n.content;
     }
   }
 
   String _formatTimestamp(DateTime dt) {
-    final local = dt.toLocal();
-    final y = local.year.toString().padLeft(4, '0');
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    final hh = local.hour.toString().padLeft(2, '0');
-    final mm = local.minute.toString().padLeft(2, '0');
-    return '$d/$m/$y • $hh:$mm';
+    final locale = LanguageController.instance.currentLanguageCode;
+    return DateFormat.yMMMd(locale).add_jm().format(dt.toLocal());
   }
 
   // -------------------- Value card --------------------
@@ -252,7 +328,8 @@ class QrResultScreen extends StatelessWidget {
   //  - code (if product)
   //  - raw scanned value
 
-  Widget _valueCard(TextTheme textTheme) {
+  Widget _valueCard(BuildContext context, TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
     final bool isProductIsbn = _isProduct && (result.data?['isIsbn'] == true);
 
     // Compute title and main display lines
@@ -267,7 +344,7 @@ class QrResultScreen extends StatelessWidget {
       final code = result.data?['code'] ?? result.raw;
 
       if (brand != null && brand.isNotEmpty) {
-        title = 'Brand';
+        title = l10n.brand;
         mainLine = brand;
         // show product name or code as subtitle if present
         if (productName != null && productName.isNotEmpty) {
@@ -276,19 +353,19 @@ class QrResultScreen extends StatelessWidget {
           subLine = code?.toString();
         }
       } else if (productName != null && productName.isNotEmpty) {
-        title = 'Product';
+        title = l10n.product;
         mainLine = productName;
         subLine = code?.toString();
       } else {
         // fallback to showing code
-        title = isProductIsbn ? 'Scanned ISBN' : 'Scanned Product Code';
+        title = isProductIsbn ? l10n.scannedIsbn : l10n.scannedProductCode;
         mainLine = (code ?? '').toString();
       }
     } else if (_isEmail && result.data?['mailto'] is String) {
       title = 'Email';
       mainLine = result.data!['mailto'] as String;
     } else {
-      title = 'Scanned value';
+      title = l10n.scannedValue;
       mainLine = result.raw;
     }
 
@@ -304,13 +381,28 @@ class QrResultScreen extends StatelessWidget {
         children: [
           Text(
             title,
-            style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+            style: textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+              color: Colors.black,
+            ),
           ),
           const SizedBox(height: 8),
-          SelectableText(
-            mainLine,
-            style: textTheme.bodyLarge?.copyWith(color: Colors.black87),
-          ),
+          _isUrl
+              ? InkWell(
+                  onTap: () => _onOpenUrl(context),
+                  child: Text(
+                    mainLine,
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: _primaryBlue,
+                      decoration: TextDecoration.underline,
+                      decorationColor: _primaryBlue.withOpacity(0.5),
+                    ),
+                  ),
+                )
+              : SelectableText(
+                  mainLine,
+                  style: textTheme.bodyLarge?.copyWith(color: Colors.black87),
+                ),
           if (subLine != null) ...[
             const SizedBox(height: 8),
             Text(
@@ -329,28 +421,29 @@ class QrResultScreen extends StatelessWidget {
   // -------------------- CTA Row --------------------
 
   Widget _ctaRow(BuildContext context, TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
     final List<_CtaConfig> ctas = [];
 
     if (_isProduct) {
       ctas.addAll([
         _CtaConfig(
           icon: Icons.storefront,
-          label: 'Shop now',
+          label: l10n.shopNow,
           onTap: () => _onShopNow(context),
         ),
         _CtaConfig(
           icon: Icons.search,
-          label: 'Web search',
+          label: l10n.webSearch,
           onTap: () => _onWebSearch(context),
         ),
         _CtaConfig(
           icon: Icons.share,
-          label: 'Share',
+          label: l10n.share,
           onTap: () => _onShare(context),
         ),
         _CtaConfig(
           icon: Icons.copy_all,
-          label: 'Copy',
+          label: l10n.copy,
           onTap: () => _onCopy(context),
         ),
       ]);
@@ -358,7 +451,7 @@ class QrResultScreen extends StatelessWidget {
       ctas.addAll([
         _CtaConfig(
           icon: Icons.open_in_browser,
-          label: 'Open',
+          label: l10n.open,
           onTap: () => _onOpenUrl(context),
         ),
         _CtaConfig(
@@ -379,7 +472,7 @@ class QrResultScreen extends StatelessWidget {
           label: 'Call',
           onTap: () => _onCall(context),
         ),
-        _CtaConfig(icon: Icons.sms, label: 'SMS', onTap: () => _onSms(context)),
+        _CtaConfig(icon: Icons.sms, label: l10n.sms, onTap: () => _onSms(context)),
         _CtaConfig(
           icon: Icons.share,
           label: 'Share',
@@ -592,7 +685,7 @@ class QrResultScreen extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: _displayValueForSearch()));
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Copied to clipboard')));
+    ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.copiedToClipboard)));
   }
 
   Future<void> _onCall(BuildContext context) async {
@@ -642,7 +735,7 @@ class QrResultScreen extends StatelessWidget {
     await Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(const SnackBar(content: Text('Wi-Fi password copied')));
+    ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.wifiPassCopied)));
   }
 
   /// Create a .vcf file from the vCard text and let the OS
@@ -656,8 +749,8 @@ class QrResultScreen extends StatelessWidget {
         // Fallback: just copy text if this isn't a vCard payload
         await Clipboard.setData(ClipboardData(text: vcard));
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Contact data copied – paste it into Contacts.'),
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.contactDataCopied),
           ),
         );
         return;
@@ -696,8 +789,8 @@ class QrResultScreen extends StatelessWidget {
   Future<void> _onAddCalendar(BuildContext context) async {
     await Clipboard.setData(ClipboardData(text: _displayValueForSearch()));
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Event data copied – import it into your Calendar app.'),
+      SnackBar(
+            content: Text(AppLocalizations.of(context)!.eventDataCopied),
       ),
     );
   }
@@ -742,7 +835,7 @@ class QrResultScreen extends StatelessWidget {
       if (context.mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Could not open link')));
+        ).showSnackBar( SnackBar(content: Text(AppLocalizations.of(context)!.failedToScan('Link'))));
       }
     }
   }

@@ -11,7 +11,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:intl/intl.dart';
+import 'package:securescan/services/language_service.dart';
 
+import 'package:securescan/l10n/app_localizations.dart';
 import '../../../themes.dart';
 
 import 'created_qr_modal_screen.dart';
@@ -152,35 +155,43 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // ---------- Helpers ----------
 
   String _labelForKind(String kind) {
+    final l10n = AppLocalizations.of(context)!;
     switch (kind) {
       case 'url':
-        return 'URL';
+        return l10n.url;
       case 'phone':
-        return 'Phone';
+        return l10n.phone;
       case 'email':
-        return 'Email';
+        return l10n.email;
       case 'wifi':
-        return 'Wi-Fi';
+        return l10n.wifi;
       case 'vcard':
-        return 'Contact';
+        return l10n.contact;
       case 'calendar':
-        return 'Calendar';
+        return l10n.calendar;
       case 'geo':
-        return 'Location';
+        return l10n.location;
       case 'json':
-        return 'JSON';
+        return l10n.json;
       case 'text':
       default:
-        return 'Content';
+        return l10n.content;
     }
   }
 
   String _normalizeCreatedType(String raw) {
+    final l10n = AppLocalizations.of(context)!;
     final t = raw.trim().toLowerCase();
-    if (t == 'url') return 'URL';
-    if (t == 'wifi' || t == 'wi-fi') return 'Wi-Fi';
-    if (t == 'contact' || t == 'vcard' || t == 'mecard') return 'Contact';
-    return raw.isEmpty ? 'Content' : raw;
+    if (t == 'url') return l10n.url;
+    if (t == 'wifi' || t == 'wi-fi') return l10n.wifi;
+    if (t == 'contact' || t == 'vcard' || t == 'mecard') return l10n.contact;
+    if (t == 'phone') return l10n.phone;
+    if (t == 'email') return l10n.email;
+    if (t == 'calendar') return l10n.calendar;
+    if (t == 'location' || t == 'geo') return l10n.location;
+    if (t == 'text' || t == 'content' || t == 'content from clipboard')
+      return l10n.content;
+    return raw.isEmpty ? l10n.content : raw;
   }
 
   String _displayValueFor(String kind, String raw, Map<String, dynamic> data) {
@@ -267,29 +278,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   String _formatNice(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final d = dt.day.toString().padLeft(2, '0');
-    final m = months[dt.month - 1];
-    final y = dt.year;
-    var hh = dt.hour;
-    final mm = dt.minute.toString().padLeft(2, '0');
-    final am = hh >= 12 ? 'pm' : 'am';
-    hh = hh % 12;
-    if (hh == 0) hh = 12;
-    return '$d $m $y | $hh:$mm $am';
+    final locale = LanguageController.instance.currentLanguageCode;
+    // Format: "Day Month Year | HH:mm"
+    // Using DateFormat for better internationalization
+    return DateFormat.yMMMd(locale).add_jm().format(dt.toLocal());
   }
 
   Future<void> _deleteScanItemByEncoded(String encoded) async {
@@ -368,6 +360,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
 
     final List<Map<String, String>> historyItems = isScanSelected
         ? scannedItems
@@ -386,7 +379,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         centerTitle: true,
         automaticallyImplyLeading: false,
         title: Text(
-          "History",
+          l10n.history,
           style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
         ),
       ),
@@ -419,7 +412,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        "Scan",
+                        l10n.scan,
                         style: textTheme.bodyMedium?.copyWith(
                           color: isScanSelected
                               ? Colors.white
@@ -443,7 +436,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       ),
                       alignment: Alignment.center,
                       child: Text(
-                        "Created",
+                        l10n.created,
                         style: textTheme.bodyMedium?.copyWith(
                           color: !isScanSelected
                               ? Colors.white
@@ -470,7 +463,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         const SizedBox(height: 160),
                         Center(
                           child: Text(
-                            "No history found",
+                            l10n.noHistoryFound,
                             style: textTheme.bodyMedium?.copyWith(
                               color: colorScheme.onSurfaceVariant,
                             ),
@@ -510,12 +503,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                               }
                             }
                           },
-                          itemBuilder: (context) => const [
+                          itemBuilder: (context) => [
                             PopupMenuItem(
                               value: 'Delete',
                               child: Text(
-                                'Delete',
-                                style: TextStyle(color: Colors.redAccent),
+                                l10n.delete,
+                                style: const TextStyle(color: Colors.redAccent),
                               ),
                             ),
                           ],
@@ -542,6 +535,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                 // Left
                                 Container(
                                   width: 68,
+                                  alignment: Alignment.center,
                                   padding: const EdgeInsets.symmetric(
                                     vertical: 18,
                                   ),
@@ -565,6 +559,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                       const SizedBox(height: 6),
                                       Text(
                                         item['type']!,
+                                        textAlign: TextAlign.center,
                                         style: textTheme.labelSmall?.copyWith(
                                           color: SecureScanTheme.accentBlue,
                                           fontWeight: FontWeight.w600,
@@ -703,6 +698,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   // ----------- Dialog -----------
 
   void _showQrPreviewDialog(String type, String value, String time) {
+    final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
@@ -742,7 +738,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                     child: Column(
                       children: [
                         Text(
-                          "YOUR QR CODE",
+                          l10n.yourQrCode,
                           style: textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.bold,
@@ -766,7 +762,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         ),
                         const SizedBox(height: 24),
                         Text(
-                          "Thank you for using\nQR & Barcode Scanner Generator",
+                          l10n.thankYou,
                           textAlign: TextAlign.center,
                           style: textTheme.bodySmall?.copyWith(
                             color: Colors.white,
@@ -784,7 +780,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: Text(
-                "Close",
+                l10n.close,
                 style: textTheme.bodyMedium?.copyWith(
                   color: colorScheme.onSurfaceVariant,
                 ),

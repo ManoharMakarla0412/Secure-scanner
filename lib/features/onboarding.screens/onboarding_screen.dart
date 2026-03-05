@@ -6,6 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:securescan/widgets/bottom_nav_shell.dart';
 import 'package:securescan/themes.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/services/language_service.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 
 class AppEntry extends StatelessWidget {
   const AppEntry({super.key});
@@ -14,7 +16,7 @@ class AppEntry extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'QR & Barcode Scanner Generator',
+      onGenerateTitle: (context) => AppLocalizations.of(context)!.copyright,
       theme: SecureScanTheme.lightTheme,
       darkTheme: SecureScanTheme.darkTheme,
       themeMode: ThemeMode.system,
@@ -37,27 +39,6 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-
-  final List<Map<String, String>> onboardingData = [
-    {
-      'title': 'Quick scan QR & Barcodes',
-      'subtitle': 'Quick scan any QR codes /barcodes and get results instantly',
-      'image': 'assets/1.png', // Phone scanning QR (e.g. product)
-    },
-    {
-      'title': 'Get product information',
-      'subtitle':
-      'Scan product barcode to get product information and other products information',
-      'image': 'assets/2.png', // QR + blue shield/checkmark
-    },
-    {
-      'title': 'Create Multiple QR codes',
-      'subtitle':
-      'A powerful generator meets all your needs for creating QR codes',
-      'image': 'assets/3.png', // Phone + share icons
-    },
-  ];
-
 
   // ---------------- Banner ad fields ----------------
   BannerAd? _bannerAd;
@@ -120,8 +101,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     super.dispose();
   }
 
-  void _nextPage() {
-    if (_currentPage < onboardingData.length - 1) {
+  void _nextPage(int itemCount) {
+    if (_currentPage < itemCount - 1) {
       _pageController.nextPage(
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeInOut,
@@ -138,7 +119,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
-    final isDark = theme.brightness == Brightness.dark;
+    final l10n = AppLocalizations.of(context)!;
+
+    final onboardingData = [
+      {
+        'title': l10n.onboarding1Title,
+        'subtitle': l10n.onboarding1Subtitle,
+        'image': 'assets/1.png',
+      },
+      {
+        'title': l10n.onboarding2Title,
+        'subtitle': l10n.onboarding2Subtitle,
+        'image': 'assets/2.png',
+      },
+      {
+        'title': l10n.onboarding3Title,
+        'subtitle': l10n.onboarding3Subtitle,
+        'image': 'assets/3.png',
+      },
+      {
+        'title': l10n.selectLanguage,
+        'subtitle': l10n.selectLanguageSubtitle,
+        'image': '',
+      },
+    ];
 
     // Ad height (0 if not ready)
     final adHeight = _isBannerAdReady && _bannerAd != null
@@ -146,7 +150,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         : 0.0;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: Colors.white,
       body: SafeArea(
         child: Stack(
           alignment: Alignment.bottomCenter,
@@ -163,26 +167,30 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     itemCount: onboardingData.length,
                     itemBuilder: (context, index) {
                       final data = onboardingData[index];
+                      final isLastPage = index == onboardingData.length - 1;
+
                       return Column(
                         mainAxisAlignment: MainAxisAlignment.start,
-                        crossAxisAlignment:
-                        CrossAxisAlignment.start, // Ensures left alignment
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // Graphic Placeholder (illustration)
-                          Container(
-                            width: double.infinity,
-                            height: 450,
-                            decoration: BoxDecoration(
-                              image: DecorationImage(
-                                image: Image.asset(data['image']!).image,
-                                fit: BoxFit.contain,
+                          // Graphic Placeholder or Language Selection
+                          if (!isLastPage)
+                            Container(
+                              width: double.infinity,
+                              height: 400,
+                              decoration: BoxDecoration(
+                                image: DecorationImage(
+                                  image: Image.asset(data['image']!).image,
+                                  fit: BoxFit.contain,
+                                ),
                               ),
-                            ),
-                          ),
+                            )
+                          else
+                            _buildLanguageOptions(context),
 
                           // Apply left padding ONLY to text section
                           Padding(
-                            padding: const EdgeInsets.only(left: 20.0),
+                            padding: const EdgeInsets.only(left: 20.0, right: 20.0),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -209,7 +217,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           ),
                         ],
                       );
-
                     },
                   ),
                 ),
@@ -219,6 +226,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ],
             ),
 
+            // 🌐 Language Selection Dropdown - Positioned at top right
+            // Removed the top-right language selection dropdown
+
             // 🔵 Bottom Banner + Controls — positioned ABOVE the ad
             Positioned(
               left: 0,
@@ -227,11 +237,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               child: Container(
                 height: 120,
                 width: double.infinity,
-                decoration: BoxDecoration(
-                  color: isDark
-                      ? const Color(0xFF1A1A1A)
-                      : const Color(0xFF006EFF),
-                  borderRadius: const BorderRadius.only(
+                decoration: const BoxDecoration(
+                  color: Color(0xFF006EFF),
+                  borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(30),
                     topRight: Radius.circular(30),
                   ),
@@ -261,7 +269,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
                     // Next / Get Started Button
                     InkWell(
-                      onTap: _nextPage,
+                      onTap: () => _nextPage(onboardingData.length),
                       borderRadius: BorderRadius.circular(50),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
@@ -276,8 +284,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           children: [
                             Text(
                               _currentPage == onboardingData.length - 1
-                                  ? "Get Started"
-                                  : "Next",
+                                  ? l10n.getStarted
+                                  : l10n.next,
                               style: textTheme.labelLarge?.copyWith(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w600,
@@ -319,6 +327,81 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildLanguageOptions(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      height: 400,
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: supportedLanguages.map((lang) {
+          return ValueListenableBuilder<Locale>(
+            valueListenable: LanguageController.instance.localeNotifier,
+            builder: (context, locale, _) {
+              final isSelected = locale.languageCode == lang.code;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 12.0),
+                child: InkWell(
+                  onTap: () {
+                    LanguageController.instance.setLanguage(lang.code);
+                  },
+                  borderRadius: BorderRadius.circular(15),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? const Color(0xFF006EFF).withOpacity(0.1)
+                          : Colors.grey[50],
+                      borderRadius: BorderRadius.circular(15),
+                      border: Border.all(
+                        color: isSelected ? const Color(0xFF006EFF) : Colors.transparent,
+                        width: 2,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Text(lang.flag, style: const TextStyle(fontSize: 24)),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                lang.name,
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: isSelected
+                                      ? const Color(0xFF006EFF)
+                                      : Colors.black87,
+                                ),
+                              ),
+                              Text(
+                                lang.nativeName,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: isSelected
+                                      ? const Color(0xFF006EFF).withOpacity(0.7)
+                                      : Colors.black54,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        if (isSelected)
+                          const Icon(Icons.check_circle, color: Color(0xFF006EFF)),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          );
+        }).toList(),
       ),
     );
   }
