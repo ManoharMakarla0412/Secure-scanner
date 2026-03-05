@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 import '../features/scan/screens/home_screen.dart';
 import '../features/history/screens/history_screen.dart';
 import '../features/settings/screens/settings_screen.dart';
@@ -46,7 +47,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
         onTap: _onTabSelected,
         items: [
           BottomNavigationBarItem(
-            label: 'Home',
+            label: AppLocalizations.of(context)!.home,
             icon: Image.asset(
               _index == 0
                   ? 'assets/icons/bottom_nav_icons/home_active.png'
@@ -56,7 +57,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
             ),
           ),
           BottomNavigationBarItem(
-            label: 'History',
+            label: AppLocalizations.of(context)!.history,
             icon: Image.asset(
               _index == 1
                   ? 'assets/icons/bottom_nav_icons/history_active.png'
@@ -66,7 +67,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
             ),
           ),
           BottomNavigationBarItem(
-            label: 'Settings',
+            label: AppLocalizations.of(context)!.settingsTitle,
             icon: Image.asset(
               _index == 2
                   ? 'assets/icons/bottom_nav_icons/settings_active.png'
