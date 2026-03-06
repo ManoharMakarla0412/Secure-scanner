@@ -21,33 +21,98 @@ import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:securescan/l10n/app_localizations.dart';
 
 import '../../../widgets/bottom_nav_shell.dart';
-import 'scan_screen_qr.dart'; // for QrResultData model
+import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:securescan/services/product_service.dart';
+import 'scan_screen_qr.dart'; 
 
-class QrResultScreen extends StatelessWidget {
+class QrResultScreen extends StatefulWidget {
   final QrResultData result;
-
-  static const Color _primaryBlue = Color(0xFF0A66FF);
 
   const QrResultScreen({super.key, required this.result});
 
-  // Heuristic: sometimes barcode scanners mark barcodes as "phone".
-  // Prefer product/book when the payload clearly looks like a product code / ISBN.
+  @override
+  State<QrResultScreen> createState() => _QrResultScreenState();
+}
+
+class _QrResultScreenState extends State<QrResultScreen> {
+  late Map<String, dynamic> _currentData;
+  bool _isLoadingProduct = false;
+  static const Color _primaryBlue = Color(0xFF0A66FF);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentData = widget.result.data != null
+        ? Map<String, dynamic>.from(widget.result.data!)
+        : {};
+
+    // If it's a product and we don't have brand/name info, fetch it now
+    if (_isProduct &&
+        _currentData['brand'] == null &&
+        _currentData['product_name'] == null) {
+      _fetchDetails();
+    }
+  }
+
+  Future<void> _fetchDetails() async {
+    if (!mounted) return;
+    setState(() => _isLoadingProduct = true);
+
+    try {
+      final code = _currentData['code'] ?? widget.result.raw;
+      final info = await ProductService.fetchProductInfo(code.toString());
+      if (info != null && mounted) {
+        setState(() {
+          _currentData.addAll(info);
+          _isLoadingProduct = false;
+        });
+        
+        // Update history in background to include the newly found info
+        _updateHistoryInBackground();
+      } else if (mounted) {
+        setState(() => _isLoadingProduct = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingProduct = false);
+    }
+  }
+
+  Future<void> _updateHistoryInBackground() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final list = prefs.getStringList('scan_history') ?? [];
+      if (list.isEmpty) return;
+
+      // Find this item in history and update it
+      // Note: This is an optimization, we don't strictly NEED to update history,
+      // but it's nice for the history screen later.
+      for (int i = list.length - 1; i >= 0; i--) {
+        final map = jsonDecode(list[i]);
+        if (map['raw'] == widget.result.raw && 
+            (map['ts'] == widget.result.timestamp.toIso8601String() || i == list.length - 1)) {
+          final payloadData = map['data'] != null ? Map<String, dynamic>.from(map['data']) : <String, dynamic>{};
+          payloadData.addAll(_currentData);
+          map['data'] = payloadData;
+          list[i] = jsonEncode(map);
+          await prefs.setStringList('scan_history', list);
+          break;
+        }
+      }
+    } catch (_) {}
+  }
+
   bool _looksLikeProductBarcode() {
     try {
-      // 1) explicit hints from parsed data
-      if (result.data != null) {
-        if (result.data!['isIsbn'] == true) return true;
-        if (result.data!['isProduct'] == true) return true;
-      }
+      if (_currentData['isIsbn'] == true) return true;
+      if (_currentData['isProduct'] == true) return true;
 
-      // 2) format hint (e.g. EAN_13, UPC_A, ISBN)
-      final fmt = (result.format ?? '').toLowerCase();
+      final fmt = (widget.result.format ?? '').toLowerCase();
       if (fmt.contains('ean') || fmt.contains('upc') || fmt.contains('isbn')) {
         return true;
       }
 
-      // 3) raw value looks like pure digits of common barcode lengths (8,12,13,14)
-      final raw = result.raw.trim();
+      final raw = widget.result.raw.trim();
       final digitOnly = RegExp(r'^\d+$').hasMatch(raw);
       if (digitOnly &&
           (raw.length == 8 ||
@@ -56,38 +121,30 @@ class QrResultScreen extends StatelessWidget {
               raw.length == 14)) {
         return true;
       }
-    } catch (_) {
-      // ignore heuristic failures
-    }
+    } catch (_) {}
     return false;
   }
 
-  bool get _isUrl => result.kind == 'url';
-  // treat product either when kind == 'product' OR the heuristic detects it
-  bool get _isProduct => result.kind == 'product' || _looksLikeProductBarcode();
-  bool get _isPhone => result.kind == 'phone' && !_looksLikeProductBarcode();
-  bool get _isEmail => result.kind == 'email';
-  bool get _isWifi => result.kind == 'wifi';
-  bool get _isVCard => result.kind == 'vcard';
-  bool get _isCalendar => result.kind == 'calendar';
-  bool get _isGeo => result.kind == 'geo';
-  bool get _isJson => result.kind == 'json';
-  bool get _isText => result.kind == 'text';
+  bool get _isUrl => widget.result.kind == 'url';
+  bool get _isProduct => widget.result.kind == 'product' || _looksLikeProductBarcode();
+  bool get _isPhone => widget.result.kind == 'phone' && !_looksLikeProductBarcode();
+  bool get _isEmail => widget.result.kind == 'email';
+  bool get _isWifi => widget.result.kind == 'wifi';
+  bool get _isVCard => widget.result.kind == 'vcard';
+  bool get _isCalendar => widget.result.kind == 'calendar';
+  bool get _isGeo => widget.result.kind == 'geo';
+  bool get _isJson => widget.result.kind == 'json';
+  bool get _isText => widget.result.kind == 'text';
 
-  // Test banner (Google’s recommended test ID)
-  static const String _testBannerId = 'ca-app-pub-3940256099942544/6300978111';
-
-  // Replace with YOUR production unit ID
-  static const String _prodBannerId = 'ca-app-pub-4377808055186677/5171383893';
-
-  String get _bannerUnitId => kDebugMode ? _testBannerId : _prodBannerId;
+  String get _bannerUnitId => kDebugMode 
+      ? 'ca-app-pub-3940256099942544/6300978111' 
+      : 'ca-app-pub-4377808055186677/5171383893';
 
   @override
   Widget build(BuildContext context) {
-    // Log screen view to Firebase Analytics
     FirebaseAnalytics.instance.logScreenView(
       screenName: 'QrResultScreen',
-      parameters: {'result_type': result.kind},
+      parameters: {'result_type': widget.result.kind},
     );
 
     final theme = Theme.of(context);
@@ -150,9 +207,10 @@ class QrResultScreen extends StatelessWidget {
               _ctaRow(context, textTheme),
               const SizedBox(height: 16),
               _adSpace(),
-              const SizedBox(height: 16),
-              if (result.imageBytes != null)
-                _capturedImageSection(textTheme, result.imageBytes!),
+              if (widget.result.imageBytes != null) ...[
+                const SizedBox(height: 16),
+                _capturedImageSection(textTheme, widget.result.imageBytes!),
+              ],
             ],
           ),
         ),
@@ -195,14 +253,14 @@ class QrResultScreen extends StatelessWidget {
   Widget _headerCard(BuildContext context, TextTheme textTheme) {
     final l10n = AppLocalizations.of(context)!;
     final typeLabel = _typeLabel(context);
-    final formatLabel = result.format ?? 'Unknown format';
-    final timeStr = _formatTimestamp(result.timestamp);
+    final formatLabel = widget.result.format ?? 'Unknown format';
+    final timeStr = _formatTimestamp(widget.result.timestamp);
 
     IconData leadingIcon;
     if (_isProduct) {
       leadingIcon = Icons.inventory_2;
     } else {
-      switch (result.kind) {
+      switch (widget.result.kind) {
         case 'url':
           leadingIcon = Icons.public;
           break;
@@ -287,12 +345,12 @@ class QrResultScreen extends StatelessWidget {
   String _typeLabel(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     // If it's an ISBN, prefer "Book"
-    final isIsbn = (result.data?['isIsbn'] == true);
+    final isIsbn = (widget.result.data?['isIsbn'] == true);
     if (isIsbn) return l10n.book;
 
     if (_isProduct) return l10n.product;
 
-    switch (result.kind) {
+    switch (widget.result.kind) {
       case 'url':
         return l10n.website;
       case 'phone':
@@ -321,7 +379,7 @@ class QrResultScreen extends StatelessWidget {
 
   // -------------------- Value card --------------------
   //
-  // UPDATED: prefer result.data['brand'] / ['product_name'] for products.
+  // UPDATED: prefer widget.result.data['brand'] / ['product_name'] for products.
   // Show a clear fallback order:
   //  - brand (primary)
   //  - product_name (secondary)
@@ -330,23 +388,20 @@ class QrResultScreen extends StatelessWidget {
 
   Widget _valueCard(BuildContext context, TextTheme textTheme) {
     final l10n = AppLocalizations.of(context)!;
-    final bool isProductIsbn = _isProduct && (result.data?['isIsbn'] == true);
+    final bool isProductIsbn = _isProduct && (_currentData['isIsbn'] == true);
 
-    // Compute title and main display lines
     String title;
     String mainLine;
-    String? subLine; // optional smaller subtitle (e.g., code or product_name)
+    String? subLine;
 
     if (_isProduct) {
-      // Prefer brand if available
-      final brand = (result.data?['brand'] as String?)?.trim();
-      final productName = (result.data?['product_name'] as String?)?.trim();
-      final code = result.data?['code'] ?? result.raw;
+      final brand = (_currentData['brand'] as String?)?.trim();
+      final productName = (_currentData['product_name'] as String?)?.trim();
+      final code = _currentData['code'] ?? widget.result.raw;
 
       if (brand != null && brand.isNotEmpty) {
         title = l10n.brand;
         mainLine = brand;
-        // show product name or code as subtitle if present
         if (productName != null && productName.isNotEmpty) {
           subLine = productName;
         } else {
@@ -357,16 +412,15 @@ class QrResultScreen extends StatelessWidget {
         mainLine = productName;
         subLine = code?.toString();
       } else {
-        // fallback to showing code
         title = isProductIsbn ? l10n.scannedIsbn : l10n.scannedProductCode;
         mainLine = (code ?? '').toString();
       }
-    } else if (_isEmail && result.data?['mailto'] is String) {
+    } else if (_isEmail && _currentData['mailto'] is String) {
       title = 'Email';
-      mainLine = result.data!['mailto'] as String;
+      mainLine = _currentData['mailto'] as String;
     } else {
       title = l10n.scannedValue;
-      mainLine = result.raw;
+      mainLine = widget.result.raw;
     }
 
     return Container(
@@ -379,12 +433,23 @@ class QrResultScreen extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title,
-            style: textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w700,
-              color: Colors.black,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              if (_isLoadingProduct)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
           ),
           const SizedBox(height: 8),
           _isUrl
@@ -655,8 +720,8 @@ class QrResultScreen extends StatelessWidget {
 
   Future<void> _onShopNow(BuildContext context) async {
     final query = _isProduct
-        ? (result.data?['code'] ?? result.raw).toString()
-        : result.raw;
+        ? (widget.result.data?['code'] ?? widget.result.raw).toString()
+        : widget.result.raw;
 
     final uri = Uri.https('www.google.com', '/search', {
       'q': query,
@@ -730,7 +795,7 @@ class QrResultScreen extends StatelessWidget {
   }
 
   Future<void> _onCopyWifiPassword(BuildContext context) async {
-    final pass = (result.data?['password'] ?? '') as String;
+    final pass = (widget.result.data?['password'] ?? '') as String;
     final text = pass.isEmpty ? _displayValueForSearch() : pass;
     await Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(
@@ -796,11 +861,11 @@ class QrResultScreen extends StatelessWidget {
   }
 
   Future<void> _onOpenMap(BuildContext context) async {
-    double? lat = result.data?['lat'] is num
-        ? (result.data!['lat'] as num).toDouble()
+    double? lat = widget.result.data?['lat'] is num
+        ? (widget.result.data!['lat'] as num).toDouble()
         : null;
-    double? lng = result.data?['lng'] is num
-        ? (result.data!['lng'] as num).toDouble()
+    double? lng = widget.result.data?['lng'] is num
+        ? (widget.result.data!['lng'] as num).toDouble()
         : null;
 
     Uri uri;
@@ -864,12 +929,14 @@ class QrResultScreen extends StatelessWidget {
     );
   }
 
+
+
+  // -------------------- Captured Image --------------------
+
   Widget _capturedImageSection(TextTheme textTheme, Uint8List bytes) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Keep captured image section (user still may want to see the frame),
-        // but the main value card now emphasizes Brand/Product instead.
         Text(
           'Captured image',
           style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
@@ -879,10 +946,10 @@ class QrResultScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: SizedBox(
             width: double.infinity,
-            height: 220, // fixed height to avoid long scroll
+            height: 220,
             child: Image.memory(
               bytes,
-              fit: BoxFit.cover, // visually crops so code area is prominent
+              fit: BoxFit.cover,
             ),
           ),
         ),
@@ -896,9 +963,9 @@ class QrResultScreen extends StatelessWidget {
   // for product results because that is more useful to users when searching.
   String _displayValueForSearch() {
     if (_isProduct) {
-      final brand = (result.data?['brand'] as String?)?.trim();
-      final productName = (result.data?['product_name'] as String?)?.trim();
-      final code = result.data?['code'] ?? result.raw;
+      final brand = (widget.result.data?['brand'] as String?)?.trim();
+      final productName = (widget.result.data?['product_name'] as String?)?.trim();
+      final code = widget.result.data?['code'] ?? widget.result.raw;
 
       if (brand != null &&
           brand.isNotEmpty &&
@@ -908,14 +975,14 @@ class QrResultScreen extends StatelessWidget {
       }
       if (brand != null && brand.isNotEmpty) return brand;
       if (productName != null && productName.isNotEmpty) return productName;
-      return code?.toString() ?? result.raw;
+      return code?.toString() ?? widget.result.raw;
     }
 
-    if (_isEmail && result.data?['mailto'] is String) {
-      return result.data!['mailto'] as String;
+    if (_isEmail && widget.result.data?['mailto'] is String) {
+      return widget.result.data!['mailto'] as String;
     }
 
-    return result.raw;
+    return widget.result.raw;
   }
 }
 

@@ -1,0 +1,106 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.buildlog/
+.history
+.svn/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you actually want to
+# potentially expose. Those files are JetBrains specific and should be ignored.
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/cmake-kits.json
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+**/ios/Flutter/EphemeralFlutterBuildIndices.h
+**/ios/Flutter/GeneratedConfig.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Flutter.podspec
+**/ios/ServiceDefinitions.json
+**/ios/Runner/GeneratedPluginRegistrant.[mh]
+**/android/Flutter/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+**/android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java
+**/android/.gradle/
+**/android/local.properties
+**/android/Flutter/flutter_export_environment.sh
+**/android/Flutter/GeneratedConfig.xcconfig
+**/android/Flutter/generated_gradle_build_settings.http
+**/ios/Flutter/App.framework
+**/ios/Flutter/App.podspec
+**/ios/Flutter/App.framework.dSYM.zip
+**/ios/Flutter/GeneratedConfig.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Flutter.framework
+**/ios/Flutter/Flutter.podspec
+**/ios/Flutter/GeneratedConfig.xcconfig
+**/ios/Flutter/flutter_export_environment.sh
+**/ios/Flutter/Flutter.podspec
+
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+/build/
+
+# Android related
+**/android/**/generated/
+**/android/gen/
+**/android/out/
+**/android/bin/
+**/android/build/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# iOS related
+**/ios/DerivedData/
+**/ios/Pods/
+**/ios/.generated/
+**/ios/*.mode1v3
+**/ios/*.mode2v3
+**/ios/*.perspectivev3
+**/ios/ProjectName.xcworkspace/xcuserdata/
+
+# Symbols for crashlytics
+**/ios/Runner/crashlytics_build_phase.sh
+
+# Coverage
+**/coverage/
+
+# Windows related
+**/windows/flutter/ephemeral/
+**/windows/CMakeLists.txt.user
+
+# Linux related
+**/linux/flutter/ephemeral/
+
+# macOS related
+**/macos/flutter/ephemeral/
+
+# Web related
+**/web/stacktrace.js
+**/web/stacktrace.js.map
+
+# Analysis
+analysis_options.yaml
+
+# Local env files
+.env*

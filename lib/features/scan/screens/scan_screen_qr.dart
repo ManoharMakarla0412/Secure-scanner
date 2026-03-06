@@ -1,24 +1,6 @@
-// lib/features/scan/screens/scan_screen_qr.dart
-// Auto-detect QR & barcodes, navigate to QrResultScreen on hit,
-// supports zoom slider, pinch-to-zoom, "scan from gallery", drawer,
-// and captures the scanned frame.
-//
-// UPDATED: when a barcode is classified as a product, attempt to fetch
-// product metadata (brand/product_name) using a chain of product
-// lookup services so coverage includes not only foods but general
-// retail products (e.g. notebooks like "Classmate").
-//
-// NOTES:
-// - You should provide a BARCODE_LOOKUP_API_KEY (optional) for best
-//   coverage. If not provided, the code falls back to OpenProductFacts
-//   (community data) and then OpenFoodFacts as a last resort.
-// - Replace placeholder keys with your real keys if you have them.
-// - For quick local debugging there's a sample image path (included by
-//   developer): /mnt/data/WhatsApp Image 2025-11-23 at 22.00.17.jpeg
-//   (this path is included purely as a reference for local testing).
-
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
@@ -27,19 +9,17 @@ import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:native_device_orientation/native_device_orientation.dart';
-import 'package:securescan/l10n/app_localizations.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_analytics/firebase_analytics.dart';
-
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/services/product_service.dart';
 import 'package:securescan/features/scan/screens/qr_result_screen.dart';
 import 'package:securescan/widgets/app_drawer.dart';
-import 'package:securescan/widgets/bottom_nav_shell.dart';
-import 'package:securescan/app.dart';
 
 class ScanScreenQR extends StatefulWidget {
   const ScanScreenQR({Key? key}) : super(key: key);
@@ -89,8 +69,9 @@ class _Payload {
   final Map<String, dynamic>? data;
   final String? symbology;
   final DateTime ts;
+  final String? imagePath;
 
-  _Payload(this.kind, this.raw, {this.data, this.symbology, DateTime? ts})
+  _Payload(this.kind, this.raw, {this.data, this.symbology, this.imagePath, DateTime? ts})
     : ts = ts ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
@@ -99,6 +80,7 @@ class _Payload {
     'data': data,
     'symbology': symbology,
     'ts': ts.toIso8601String(),
+    'imagePath': imagePath,
   };
 }
 
@@ -116,9 +98,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   // Product lookup API keys / configs (set these to your keys if you have them)
   // Best coverage: BarcodeLookup (https://www.barcodelookup.com/) — requires API key
   // Fallback: OpenProductFacts / OpenFoodFacts (community datasets)
-  static const String BARCODE_LOOKUP_API_KEY =
-      ''; // <-- set your key here (optional)
-  static const Duration _productLookupTimeout = Duration(seconds: 6);
 
   // Torch + zoom state
   bool _torchOn = false;
@@ -129,9 +108,17 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   final MobileScannerController _cameraController = MobileScannerController(
     facing: CameraFacing.back,
     detectionSpeed: DetectionSpeed.unrestricted,
-    detectionTimeoutMs: 100,
+    detectionTimeoutMs: 50,
     returnImage: true,
     autoStart: true,
+    formats: [
+      BarcodeFormat.qrCode,
+      BarcodeFormat.ean8,
+      BarcodeFormat.ean13,
+      BarcodeFormat.upcA,
+      BarcodeFormat.upcE,
+      BarcodeFormat.code128,
+    ],
   );
 
   final ImagePicker _picker = ImagePicker();
@@ -140,7 +127,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   String? _lastScanned;
   bool _isProcessing = false;
   Map<String, dynamic>? _parsedJson;
-  Uint8List? _lastImageBytes;
+  String? _docsDir;
 
   // Sweep animation
   late final AnimationController _sweepController;
@@ -188,8 +175,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     // Log screen view to Firebase Analytics
     FirebaseAnalytics.instance.logScreenView(screenName: 'ScanScreenQR');
 
-    // Lock to portrait while scanning
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    // Initialize docs dir for faster image saving in background
+    getApplicationDocumentsDirectory().then((dir) => _docsDir = dir.path);
+
     _sweepController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2200),
@@ -200,27 +188,21 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     _loadInterstitial();
     _loadBannerAd();
 
-    // Start camera (autoStart handles initial start, but this ensures it's running)
+    // Request camera permission — autoStart: true handles camera initialization
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {
-        if (!_cameraController.value.isInitialized) {
-          final status = await Permission.camera.request();
-          if (status.isDenied || status.isPermanentlyDenied) {
-            _showIssueDialog(
-              AppLocalizations.of(context)!.cameraPermissionRequired,
-              actionText: AppLocalizations.of(context)!.openSettings,
-              onAction: () => openAppSettings(),
-            );
-            return;
-          }
-          await _cameraController.start();
+        final status = await Permission.camera.request();
+        if (status.isDenied || status.isPermanentlyDenied) {
+          _showIssueDialog(
+            AppLocalizations.of(context)!.cameraPermissionRequired,
+            actionText: AppLocalizations.of(context)!.openSettings,
+            onAction: () => openAppSettings(),
+          );
+          return;
         }
-        //_checkAndShowFocusToast();
+        // autoStart: true handles camera initialization
       } catch (e) {
         debugPrint('Camera start failed: $e');
-        // if (mounted) {
-        //   _showIssueDialog(AppLocalizations.of(context)!.cameraNotWorking);
-        // }
       }
     });
 
@@ -240,6 +222,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         _cameraController.stop();
         break;
       case AppLifecycleState.resumed:
+        _lastScanned = null; // Allow re-scanning the same code after returning
         _cameraController.start();
         break;
       case AppLifecycleState.inactive:
@@ -248,26 +231,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     }
   }
 
-  Future<void> _checkAndShowFocusToast() async {
-    final prefs = await SharedPreferences.getInstance();
-    final hasShown = prefs.getBool('first_scan_toast_shown') ?? false;
-    if (!hasShown) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.cameraNotWorking),
-          duration: const Duration(seconds: 4),
-          backgroundColor: Colors.redAccent,
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {},
-          ),
-        ),
-      );
-      await prefs.setBool('first_scan_toast_shown', true);
-    }
-  }
 
   @override
   void dispose() {
@@ -277,8 +240,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
     _interstitialAd?.dispose();
     _bannerAd?.dispose();
-
-    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
     super.dispose();
   }
@@ -439,15 +400,28 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
   void _onDetect(BarcodeCapture capture) async {
     if (_isProcessing || capture.barcodes.isEmpty) return;
-    _isProcessing = true;
+    setState(() => _isProcessing = true);
 
     final picked = capture.barcodes.first;
+    // Capture the frame image returned by mobile_scanner
     final imageBytes = capture.image;
 
-    if (!mounted) return;
+    if (!mounted) {
+      _isProcessing = false;
+      return;
+    }
 
-    // Proceed immediately with normal flow
-    await _handleBarcode(picked, imageBytes);
+    try {
+      // Proceed immediately with normal flow
+      await _handleBarcode(picked, imageBytes);
+    } catch (e) {
+      debugPrint('[Scanner] Error in _handleBarcode: $e');
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      } else {
+        _isProcessing = false;
+      }
+    }
   }
 
   void _applyZoom() {
@@ -456,110 +430,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     _cameraController.setZoomScale(normalized);
   }
 
-  /// Try multiple product lookup services (in order) to maximize chance of finding
-  /// general retail product metadata (brand / product_name) for the scanned code.
-  ///
-  /// The function will:
-  ///  1) Query BarcodeLookup (if BARCODE_LOOKUP_API_KEY is set) — good commercial coverage
-  ///  2) Query OpenProductFacts (community product registry) — broad non-food coverage in some regions
-  ///  3) Query OpenFoodFacts as a final fallback (mostly food items but useful sometimes)
-  ///
-  /// Returns a map with keys like {'brand': 'BrandName', 'product_name': 'Name'} if found,
-  /// otherwise returns null.
-  Future<Map<String, dynamic>?> _fetchProductInfo(String code) async {
-    // normalize code
-    final normalizedCode = code.trim();
-
-    // 1) BarcodeLookup (commercial) — best coverage for general retail products.
-    if (BARCODE_LOOKUP_API_KEY.isNotEmpty) {
-      try {
-        final uri = Uri.https('api.barcodelookup.com', '/v3/products', {
-          'barcode': normalizedCode,
-          'key': BARCODE_LOOKUP_API_KEY,
-        });
-        final resp = await http.get(uri).timeout(_productLookupTimeout);
-        if (resp.statusCode == 200) {
-          final map = jsonDecode(resp.body) as Map<String, dynamic>;
-          if (map['products'] != null && (map['products'] as List).isNotEmpty) {
-            final p = (map['products'] as List).first as Map<String, dynamic>;
-            final brand = (p['brand'] as String?)?.trim();
-            final title = (p['title'] as String?)?.trim();
-            final manufacturer = (p['manufacturer'] as String?)?.trim();
-            final out = <String, dynamic>{};
-            if (brand != null && brand.isNotEmpty) out['brand'] = brand;
-            if (title != null && title.isNotEmpty) out['product_name'] = title;
-            if (manufacturer != null &&
-                manufacturer.isNotEmpty &&
-                out['brand'] == null) {
-              out['brand'] = manufacturer;
-            }
-            if (out.isNotEmpty) return out;
-          }
-        }
-      } catch (e) {
-        debugPrint('[ProductLookup] BarcodeLookup failed: $e');
-      }
-    }
-
-    // 2) OpenProductFacts (community dataset for generic products)
-    //    (Note: endpoint and dataset coverage can vary by country)
-    try {
-      final uri = Uri.https(
-        'world.openproductfacts.org',
-        '/api/v0/product/$normalizedCode.json',
-      );
-      final resp = await http.get(uri).timeout(_productLookupTimeout);
-      if (resp.statusCode == 200) {
-        final map = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (map['status'] == 1 && map['product'] != null) {
-          final product = map['product'] as Map<String, dynamic>;
-          final brandCandidates = <String>[];
-          if (product['brands'] is String &&
-              (product['brands'] as String).trim().isNotEmpty) {
-            brandCandidates.add((product['brands'] as String).trim());
-          }
-          if (product['brand'] is String &&
-              (product['brand'] as String).trim().isNotEmpty) {
-            brandCandidates.add((product['brand'] as String).trim());
-          }
-          final name = (product['product_name'] as String?)?.trim();
-          final out = <String, dynamic>{};
-          if (brandCandidates.isNotEmpty) out['brand'] = brandCandidates.first;
-          if (name != null && name.isNotEmpty) out['product_name'] = name;
-          if (out.isNotEmpty) return out;
-        }
-      }
-    } catch (e) {
-      debugPrint('[ProductLookup] OpenProductFacts failed: $e');
-    }
-
-    // 3) OpenFoodFacts fallback
-    try {
-      final uri = Uri.https(
-        'world.openfoodfacts.org',
-        '/api/v0/product/$normalizedCode.json',
-      );
-      final resp = await http.get(uri).timeout(_productLookupTimeout);
-      if (resp.statusCode == 200) {
-        final map = jsonDecode(resp.body) as Map<String, dynamic>;
-        if (map['status'] == 1 && map['product'] != null) {
-          final product = map['product'] as Map<String, dynamic>;
-          final brands = (product['brands'] as String?)?.trim();
-          final productName = (product['product_name'] as String?)?.trim();
-          final out = <String, dynamic>{};
-          if (brands != null && brands.isNotEmpty) out['brand'] = brands;
-          if (productName != null && productName.isNotEmpty)
-            out['product_name'] = productName;
-          if (out.isNotEmpty) return out;
-        }
-      }
-    } catch (e) {
-      debugPrint('[ProductLookup] OpenFoodFacts failed: $e');
-    }
-
-    // No useful info found
-    return null;
-  }
 
   Future<void> _handleBarcode(Barcode barcode, Uint8List? imageBytes) async {
     final raw = barcode.rawValue;
@@ -570,8 +440,11 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     setState(() {
       _lastScanned = raw;
       _parsedJson = null;
-      _lastImageBytes = imageBytes;
     });
+
+    // Capture image bytes in a local variable immediately so a subsequent
+    // detection callback cannot overwrite them before navigation completes.
+    final Uint8List? capturedImage = imageBytes;
 
     // Try parsing JSON (for QR payloads)
     try {
@@ -583,49 +456,37 @@ class _ScanScreenQRState extends State<ScanScreenQR>
       _parsedJson = null;
     }
 
-    // We don't stop the camera here anymore to avoid black frames.
-    // Instead, _isProcessing guard at the top of _onDetect handles it.
-    // await _cameraController.stop();
-
-    // Classify payload
-    final payload = _classifyPayload(raw, symbology: barcode.format.name);
-
-    // Save to history
-    await _saveScan(payload);
-
-    // If it's a product barcode, attempt to fetch brand/product info
-    Map<String, dynamic>? mergedData;
-    if (payload.data != null)
-      mergedData = Map<String, dynamic>.from(payload.data!);
-    mergedData ??= {};
-
-    if (payload.kind == _PayloadKind.product) {
-      final codeCandidate = mergedData['code']?.toString() ?? payload.raw;
-      final timer = Stopwatch()..start();
-      try {
-        final productInfo = await _fetchProductInfo(codeCandidate);
-        if (productInfo != null) {
-          mergedData.addAll(productInfo);
+    // Optimize speed: Generate image path and start saving in background
+    String? savedImagePath;
+    if (capturedImage != null && _docsDir != null) {
+      final fileName = 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      savedImagePath = '${_docsDir}/$fileName';
+      
+      () async {
+        try {
+          final file = File(savedImagePath!);
+          await file.writeAsBytes(capturedImage);
+          final payload = _classifyPayload(raw, symbology: barcode.format.name, imagePath: savedImagePath);
+          await _saveScan(payload);
+        } catch (e) {
+          debugPrint('[History] Async background save failed: $e');
         }
-      } catch (e) {
-        debugPrint('[ProductLookup] error: $e');
-      } finally {
-        timer.stop();
-        debugPrint(
-          '[ProductLookup] lookup took ${timer.elapsedMilliseconds}ms for $codeCandidate',
-        );
-      }
+      }();
+    } else if (_docsDir == null) {
+      getApplicationDocumentsDirectory().then((dir) => _docsDir = dir.path);
     }
 
-    setState(() => _isProcessing = false);
+    final payload = _classifyPayload(raw, symbology: barcode.format.name, imagePath: savedImagePath);
 
-    // Prepare result - include brand/product_name if available in data
+    // Prepare result — use the local capturedImage.
+    // We DON'T fetch product info here anymore to keep scanning instant.
+    // QrResultScreen will handle the fetch asynchronously.
     final result = QrResultData(
       raw: payload.raw,
       kind: payload.kind.name,
       format: payload.symbology,
-      data: mergedData.isNotEmpty ? mergedData : null,
-      imageBytes: _lastImageBytes,
+      data: payload.data,
+      imageBytes: capturedImage,
       timestamp: payload.ts,
     );
 
@@ -644,6 +505,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
     // --- show interstitial (if ready) and then navigate ---
     await _showInterstitialThenNavigate(result);
+
+    // Unblock detection pipeline only after navigation is complete
+    setState(() => _isProcessing = false);
   }
 
   // --- [NEW] Issue Dialog with Black Screen Background ---
@@ -677,12 +541,12 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                     color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
                     borderRadius: BorderRadius.circular(28),
                     border: Border.all(
-                      color: Colors.redAccent.withOpacity(0.3),
+                      color: Colors.redAccent.withValues(alpha: 0.3),
                       width: 1.5,
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
                         blurRadius: 40,
                         spreadRadius: 2,
                       )
@@ -694,7 +558,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                       Container(
                         padding: const EdgeInsets.all(18),
                         decoration: BoxDecoration(
-                          color: Colors.redAccent.withOpacity(0.15),
+                          color: Colors.redAccent.withValues(alpha: 0.15),
                           shape: BoxShape.circle,
                         ),
                         child: const Icon(
@@ -718,7 +582,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                         message,
                         textAlign: TextAlign.center,
                         style: GoogleFonts.inter(
-                          color: isDark ? Colors.white.withOpacity(0.75) : Colors.black54,
+                          color: isDark ? Colors.white.withValues(alpha: 0.75) : Colors.black54,
                           fontSize: 16,
                           height: 1.6,
                         ),
@@ -760,7 +624,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                           style: OutlinedButton.styleFrom(
                             foregroundColor: isDark ? Colors.white60 : Colors.black54,
                             side: BorderSide(
-                              color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1),
+                              color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1),
                             ),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
@@ -834,46 +698,42 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     caseSensitive: false,
   );
 
-  _Payload _classifyPayload(String raw, {String? symbology}) {
+  _Payload _classifyPayload(String raw, {String? symbology, String? imagePath}) {
     final s = raw.trim();
-    final sym = symbology?.toLowerCase() ?? '';
+    final sym = (symbology ?? '').toLowerCase();
 
-    final bool isQr = sym.contains('qr');
-    final bool isBarcode = !isQr && sym.isNotEmpty;
-
-    // ----- Barcodes → treat as product / ISBN (never as phone) -----
-    if (isBarcode) {
+    // Isbn / Product (from Format)
+    if (sym.contains('ean') || sym.contains('upc') || sym.contains('isbn')) {
+      final isIsbn = sym.contains('isbn');
       final code = s;
-      bool isIsbn = false;
-
-      if ((code.length == 13 &&
-              (code.startsWith('978') || code.startsWith('979')) &&
-              RegExp(r'^\d{13}$').hasMatch(code)) ||
-          (code.length == 10 && RegExp(r'^\d{9}[\dX]$').hasMatch(code))) {
-        isIsbn = true;
-      }
-
       return _Payload(
         _PayloadKind.product,
         s,
         symbology: symbology,
         data: {'code': code, 'isIsbn': isIsbn},
+        imagePath: imagePath,
       );
     }
 
     // ----- QR & generic classification -----
 
     // URL
-    if (_urlRegex.hasMatch(s)) {
-      return _Payload(_PayloadKind.url, s, symbology: symbology);
+    if (s.toLowerCase().startsWith('http://') ||
+        s.toLowerCase().startsWith('https://')) {
+      return _Payload(
+        _PayloadKind.url,
+        s,
+        symbology: symbology,
+        imagePath: imagePath,
+      );
     }
 
     // Phone
     if (s.startsWith('tel:')) {
-      return _Payload(_PayloadKind.phone, s.substring(4), symbology: symbology);
+      return _Payload(_PayloadKind.phone, s.substring(4), symbology: symbology, imagePath: imagePath);
     }
     if (_phoneRegex.hasMatch(s)) {
-      return _Payload(_PayloadKind.phone, s, symbology: symbology);
+      return _Payload(_PayloadKind.phone, s, symbology: symbology, imagePath: imagePath);
     }
 
     // Email
@@ -884,10 +744,11 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         addr,
         data: {'mailto': s},
         symbology: symbology,
+        imagePath: imagePath,
       );
     }
     if (RegExp(r'^[\w\.\-+]+@[\w\.\-]+\.[A-Za-z]{2,}\$').hasMatch(s)) {
-      return _Payload(_PayloadKind.email, s, symbology: symbology);
+      return _Payload(_PayloadKind.email, s, symbology: symbology, imagePath: imagePath);
     }
 
     // Wi-Fi
@@ -909,17 +770,18 @@ class _ScanScreenQRState extends State<ScanScreenQR>
           'hidden': parts['H'] == 'true',
         },
         symbology: symbology,
+        imagePath: imagePath,
       );
     }
 
     // vCard
     if (s.contains('BEGIN:VCARD')) {
-      return _Payload(_PayloadKind.vcard, s, symbology: symbology);
+      return _Payload(_PayloadKind.vcard, s, symbology: symbology, imagePath: imagePath);
     }
 
     // Calendar
     if (s.contains('BEGIN:VEVENT') || s.contains('BEGIN:VCALENDAR')) {
-      return _Payload(_PayloadKind.calendar, s, symbology: symbology);
+      return _Payload(_PayloadKind.calendar, s, symbology: symbology, imagePath: imagePath);
     }
 
     // Geo
@@ -932,6 +794,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         s,
         data: {'lat': lat, 'lng': lng},
         symbology: symbology,
+        imagePath: imagePath,
       );
     }
 
@@ -942,11 +805,16 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         s,
         data: _parsedJson,
         symbology: symbology,
+        imagePath: imagePath,
       );
     }
 
     // Plain text
-    return _Payload(_PayloadKind.text, s, symbology: symbology);
+    try {
+      return _Payload(_PayloadKind.text, s, symbology: symbology, imagePath: imagePath);
+    } catch (_) {
+      return _Payload(_PayloadKind.text, s, symbology: symbology, imagePath: imagePath);
+    }
   }
 
   // -------------------- History --------------------
@@ -958,11 +826,26 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 
       list.add(jsonEncode(payload.toJson()));
 
-      final pruned = list.length > _historyCap
-          ? list.sublist(list.length - _historyCap)
-          : list;
-
-      await prefs.setStringList(_prefsKey, pruned);
+      if (list.length > _historyCap) {
+        // Prune older items & clean up their image files to prevent storage leak
+        final toRemove = list.sublist(0, list.length - _historyCap);
+        for (final itemJson in toRemove) {
+          try {
+            final map = jsonDecode(itemJson);
+            final path = map['imagePath']?.toString();
+            if (path != null) {
+              final file = File(path);
+              if (await file.exists()) {
+                await file.delete();
+              }
+            }
+          } catch (_) {}
+        }
+        final pruned = list.sublist(list.length - _historyCap);
+        await prefs.setStringList(_prefsKey, pruned);
+      } else {
+        await prefs.setStringList(_prefsKey, list);
+      }
     } catch (_) {
       // ignore
     }
@@ -989,54 +872,24 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         children: [
           // Camera preview with pinch-to-zoom
           Positioned.fill(
-            child: NativeDeviceOrientationReader(
-              useSensor: true,
-              builder: (context) {
-                final orientation = NativeDeviceOrientationReader.orientation(
-                  context,
-                );
-
-                int quarterTurns = 0;
-                switch (orientation) {
-                  case NativeDeviceOrientation.portraitUp:
-                    quarterTurns = 0;
-                    break;
-                  case NativeDeviceOrientation.landscapeLeft:
-                    quarterTurns = 1;
-                    break;
-                  case NativeDeviceOrientation.landscapeRight:
-                    quarterTurns = 3;
-                    break;
-                  case NativeDeviceOrientation.portraitDown:
-                    quarterTurns = 2;
-                    break;
-                  case NativeDeviceOrientation.unknown:
-                    quarterTurns = 0;
-                }
-
-                return GestureDetector(
-                  onScaleStart: (details) {
-                    _baseZoomOnScaleStart = _zoom;
-                  },
-                  onScaleUpdate: (details) {
-                    if (details.pointerCount < 2) return;
-                    final newZoom = (_baseZoomOnScaleStart * details.scale)
-                        .clamp(1.0, 4.0);
-                    setState(() {
-                      _zoom = newZoom;
-                    });
-                    _applyZoom();
-                  },
-                  child: RotatedBox(
-                    quarterTurns: quarterTurns,
-                    child: MobileScanner(
-                      controller: _cameraController,
-                      fit: BoxFit.cover,
-                      onDetect: _onDetect,
-                    ),
-                  ),
-                );
+            child: GestureDetector(
+              onScaleStart: (details) {
+                _baseZoomOnScaleStart = _zoom;
               },
+              onScaleUpdate: (details) {
+                if (details.pointerCount < 2) return;
+                final newZoom = (_baseZoomOnScaleStart * details.scale)
+                    .clamp(1.0, 4.0);
+                setState(() {
+                  _zoom = newZoom;
+                });
+                _applyZoom();
+              },
+              child: MobileScanner(
+                controller: _cameraController,
+                fit: BoxFit.cover,
+                onDetect: _onDetect,
+              ),
             ),
           ),
 
@@ -1115,9 +968,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  _brandBlue.withOpacity(0.55),
-                                  _brandBlue.withOpacity(0.30),
-                                  _brandBlue.withOpacity(0.10),
+                                  _brandBlue.withValues(alpha: 0.55),
+                                  _brandBlue.withValues(alpha: 0.30),
+                                  _brandBlue.withValues(alpha: 0.10),
                                   Colors.transparent,
                                 ],
                                 stops: const [0, 0.45, 0.8, 1],

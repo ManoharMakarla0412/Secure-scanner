@@ -32,9 +32,8 @@ void main() async {
   await SecureScanThemeController.instance.init();
   await LanguageController.instance.init();
 
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-  ]).then((_) => runApp(const SecureScanApp()));
+  SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  runApp(const SecureScanApp());
 }
 
 // AdMOB UNIT IDS

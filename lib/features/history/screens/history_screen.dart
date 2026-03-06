@@ -1,5 +1,5 @@
-// history_screen.dart
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -18,6 +18,8 @@ import 'package:securescan/l10n/app_localizations.dart';
 import '../../../themes.dart';
 
 import 'created_qr_modal_screen.dart';
+import 'package:securescan/features/scan/screens/scan_screen_qr.dart'; // QrResultData
+import 'package:securescan/features/scan/screens/qr_result_screen.dart'; // QrResultScreen
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -285,6 +287,17 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _deleteScanItemByEncoded(String encoded) async {
+    try {
+      final map = jsonDecode(encoded);
+      final path = map['imagePath']?.toString();
+      if (path != null) {
+        final file = File(path);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      }
+    } catch (_) {}
+
     final prefs = await SharedPreferences.getInstance();
     _scanEncoded.remove(encoded);
     await prefs.setStringList('scan_history', _scanEncoded);
@@ -629,55 +642,56 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   void _onHistoryItemTap(Map<String, String> item) async {
-    // If scan tab -> try to open, else (created) -> open full-screen created QR modal screen
     if (isScanSelected) {
-      final type = item['type'] ?? '';
-      final raw = item['raw'] ?? '';
-      final kindLower = (item['kind'] ?? '').toLowerCase();
+      // Navigate to QrResultScreen with the stored scan data
+      final raw = item['raw'] ?? item['value'] ?? '';
+      final kind = item['kind'] ?? 'text';
+      final tsStr = item['time'] ?? '';
 
-      try {
-        if (kindLower == 'url' || type == 'URL') {
-          final uri = Uri.tryParse(raw);
-          if (uri != null) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-            return;
+      // Parse the encoded JSON to extract additional data and image if available
+      Map<String, dynamic>? data;
+      String? format;
+      Uint8List? imageBytes;
+      DateTime timestamp = DateTime.now();
+      if (item['encoded'] != null) {
+        try {
+          final map = jsonDecode(item['encoded']!) as Map<String, dynamic>;
+          if (map['data'] is Map) {
+            data = Map<String, dynamic>.from(map['data']);
           }
-        } else if (kindLower == 'phone' || type == 'Phone') {
-          final uri = Uri(scheme: 'tel', path: raw);
-          await launchUrl(uri);
-          return;
-        } else if (kindLower == 'email' || type == 'Email') {
-          final uri = Uri(scheme: 'mailto', path: raw);
-          await launchUrl(uri);
-          return;
-        } else if (kindLower == 'geo' || type == 'Location') {
-          // raw might be "lat,lng" or full geo: uri
-          final coords = raw.split(',');
-          if (coords.length >= 2) {
-            final lat = coords[0].trim();
-            final lng = coords[1].trim();
-            final google = Uri.parse(
-              'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
-            );
-            await launchUrl(google, mode: LaunchMode.externalApplication);
-            return;
-          } else {
-            final parsed = Uri.tryParse(raw);
-            if (parsed != null) {
-              await launchUrl(parsed, mode: LaunchMode.externalApplication);
-              return;
+          format = map['symbology']?.toString();
+          final ts = map['ts']?.toString();
+          if (ts != null) {
+            timestamp = DateTime.tryParse(ts) ?? DateTime.now();
+          }
+          final imageBase64 = map['image']?.toString();
+          if (imageBase64 != null) {
+            imageBytes = base64Decode(imageBase64);
+          }
+          final imagePath = map['imagePath']?.toString();
+          if (imagePath != null) {
+            final file = File(imagePath);
+            if (await file.exists()) {
+              imageBytes = await file.readAsBytes();
             }
           }
-        }
-      } catch (_) {
-        // ignore and fallback to showing QR preview
+        } catch (_) {}
       }
 
-      // fallback: show small QR preview dialog (for items that cannot be opened directly)
-      _showQrPreviewDialog(
-        item['type'] ?? 'Content',
-        item['raw'] ?? item['value'] ?? '',
-        item['time'] ?? '',
+      final result = QrResultData(
+        raw: raw,
+        kind: kind,
+        format: format,
+        data: data,
+        imageBytes: imageBytes,
+        timestamp: timestamp,
+      );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => QrResultScreen(result: result),
+        ),
       );
     } else {
       // Created tab -> open full screen created QR modal screen
