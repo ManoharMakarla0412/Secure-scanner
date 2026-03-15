@@ -3,13 +3,14 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:securescan/core/constants/app_assets.dart';
 import 'package:securescan/widgets/app_drawer.dart';
 
 import 'package:securescan/features/generate/screens/generator_screen.dart';
 import 'package:securescan/features/scan/screens/scan_screen_qr.dart';
 import 'package:securescan/l10n/app_localizations.dart';
-
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -19,24 +20,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-
-  // Use Google's test banner id in debug. Replace with your real id for release.
-  static const String _googleTestBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-
-  // Replace with your real production ad unit id (kept here for clarity)
-  static const String _productionBannerAdUnitId =
-      'ca-app-pub-2961863855425096/5968213716';
-
-  // Retry logic
-  int _loadAttempts = 0;
-  static const int _maxLoadAttempts = 3;
-  Timer? _adRetryTimer;
-
-  String get _adUnitId =>
-      kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
+  // Ad Unit IDs managed in AdManager
 
   @override
   void initState() {
@@ -49,74 +33,12 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Load ad once we have context/MediaQuery available
-    if (!_isBannerAdReady && _bannerAd == null) {
-      _loadBannerAd();
-    }
   }
 
-  void _loadBannerAd() {
-    if (!mounted) return;
-
-    // Calculate 50% height based on available space
-    final mediaQuery = MediaQuery.of(context);
-    final double fullH = mediaQuery.size.height;
-    final double safeTop = mediaQuery.padding.top;
-    final double safeBottom = mediaQuery.padding.bottom;
-    final double appBarH = kToolbarHeight;
-    final double totalH = fullH - safeTop - safeBottom - appBarH;
-
-    final int adH = (totalH * 0.50).toInt();
-    final int adW = (mediaQuery.size.width - 48).toInt(); // horizontal padding 24*2
-
-    // Clean up any existing ad
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
-      request: const AdRequest(),
-      size: AdSize(width: adW, height: adH),
-      listener: BannerAdListener(
-        onAdLoaded: (Ad ad) {
-          if (!mounted) return;
-          debugPrint('[Ads] Banner loaded.');
-          setState(() {
-            _isBannerAdReady = true;
-            _loadAttempts = 0;
-          });
-        },
-        onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          ad.dispose();
-          if (!mounted) return;
-
-          _isBannerAdReady = false;
-          _loadAttempts += 1;
-          debugPrint(
-            '[Ads] Banner failed to load: $error (attempt $_loadAttempts)',
-          );
-          if (_loadAttempts <= _maxLoadAttempts) {
-            // Exponential backoff retry
-            final delaySeconds = 1 << (_loadAttempts - 1); // 1,2,4
-            debugPrint('[Ads] Retrying banner load in $delaySeconds s...');
-            _adRetryTimer?.cancel();
-            _adRetryTimer = Timer(Duration(seconds: delaySeconds), _loadBannerAd);
-          } else {
-            debugPrint('[Ads] Reached max load attempts. Giving up for now.');
-          }
-          setState(() {}); // ensure UI hides the ad space
-        },
-        onAdOpened: (Ad ad) => debugPrint('[Ads] Banner opened.'),
-        onAdClosed: (Ad ad) => debugPrint('[Ads] Banner closed.'),
-        onAdImpression: (Ad ad) => debugPrint('[Ads] Banner impression.'),
-      ),
-    );
-
-    _bannerAd!.load();
-  }
+  // Ad loading handled by BannerAdWidget
 
   @override
   void dispose() {
-    _adRetryTimer?.cancel();
-    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -157,7 +79,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 flex: 20, // 20% height
                 child: PrimaryCTA(
                   label: AppLocalizations.of(context)!.scan,
-                  iconPath: 'assets/icons/misc/scan_qr_icon_white.png',
+                  iconPath: AppAssets.scanIcon,
                   width: double.infinity,
                   // height is controlled by Expanded -> tight constraint
                   onTap: () {
@@ -180,7 +102,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 flex: 20, // 20% height
                 child: PrimaryCTA(
                   label: AppLocalizations.of(context)!.createQr,
-                  iconPath: 'assets/icons/misc/create_qr_icon_white.png',
+                  iconPath: AppAssets.createIcon,
                   width: double.infinity,
                   onTap: () {
                     Navigator.push(
@@ -192,17 +114,11 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
               const Spacer(flex: 4), // ~4% gap
               // --- Banner Ad spot: Occupies 50% height ---
-              Expanded(
+              const Expanded(
                 flex: 50, // 50% height
-                child: _isBannerAdReady && _bannerAd != null
-                    ? Center(
-                        child: SizedBox(
-                          width: _bannerAd!.size.width.toDouble(),
-                          height: _bannerAd!.size.height.toDouble(),
-                          child: AdWidget(ad: _bannerAd!),
-                        ),
-                      )
-                    : const SizedBox.shrink(),
+                child: Center(
+                  child: BannerAdWidget(adSize: AdSize.mediumRectangle),
+                ),
               ),
               const Spacer(flex: 2), // ~2% bottom spacing
             ],

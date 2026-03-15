@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:securescan/l10n/app_localizations.dart';
@@ -35,27 +37,46 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
 
   Future<void> _checkPermissions() async {
     final cameraStatus = await Permission.camera.status;
-    // For gallery, we might need multiple permissions depending on Android version
-    // But usually photos/storage is what we need.
-    final galleryStatus = await Permission.photos.status;
     
-    // On some android versions photos might not be enough, check storage too
-    var storageStatus = await Permission.storage.status;
+    // For gallery, we might need different permissions depending on Android version
+    late PermissionStatus galleryStatus;
+    
+    if (Platform.isAndroid) {
+      // Check for SDK level if possible, but easier to check both
+      final photos = await Permission.photos.status;
+      final storage = await Permission.storage.status;
+      
+      if (photos.isGranted || storage.isGranted) {
+        galleryStatus = PermissionStatus.granted;
+      } else {
+        galleryStatus = photos; // or storage, depending on which one was requested
+      }
+    } else {
+      galleryStatus = await Permission.photos.status;
+    }
 
     if (mounted) {
       setState(() {
         _statuses = {
           Permission.camera: cameraStatus,
-          Permission.photos: (galleryStatus.isGranted || storageStatus.isGranted) 
-              ? PermissionStatus.granted 
-              : galleryStatus,
+          Permission.photos: galleryStatus,
         };
       });
     }
   }
 
   Future<void> _requestPermission(Permission permission) async {
-    final status = await permission.request();
+    if (permission == Permission.photos && Platform.isAndroid) {
+      // For Android, try photos first, then storage as fallback or vice versa
+      final status = await Permission.photos.request();
+      if (!status.isGranted) {
+        await Permission.storage.request();
+      }
+    } else {
+      await permission.request();
+    }
+    
+    final status = await permission.status;
     if (status.isPermanentlyDenied) {
       openAppSettings();
     }
@@ -96,7 +117,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
             child: ElevatedButton.icon(
               onPressed: () => openAppSettings(),
               icon: const Icon(Icons.settings),
-              label: Text(l10n.openSettings),
+              label: Text(l10n.openSettings,style: const TextStyle(color: Colors.white)),
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                 shape: RoundedRectangleBorder(
@@ -120,6 +141,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context)!;
     final isGranted = status.isGranted;
+    final colorScheme = theme.colorScheme;
     final isDark = theme.brightness == Brightness.dark;
 
     return Container(
@@ -154,11 +176,16 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
               children: [
                 Text(
                   title,
-                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: colorScheme.onBackground,
+                  ),
                 ),
                 Text(
                   subtitle,
-                  style: theme.textTheme.bodySmall?.copyWith(color: theme.textTheme.bodySmall?.color?.withOpacity(0.7)),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurface.withOpacity(0.6),
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Text(

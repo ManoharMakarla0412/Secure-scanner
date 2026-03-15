@@ -5,9 +5,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:securescan/widgets/bottom_nav_shell.dart';
 import 'package:securescan/themes.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 import 'package:securescan/services/language_service.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/features/onboarding.screens/initial_permissions_screen.dart';
 
 class AppEntry extends StatelessWidget {
   const AppEntry({super.key});
@@ -40,63 +41,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
-  // ---------------- Banner ad fields ----------------
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-  int _loadAttempts = 0;
-  static const int _maxLoadAttempts = 3;
-
-  // Google's test banner id for development
-  static const String _googleTestBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-
-  // Replace with your production ad unit id
-  static const String _productionBannerAdUnitId =
-      'ca-app-pub-2961863855425096/5968213716';
-
-  String get _adUnitId => kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
-
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
   }
 
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
-      request: const AdRequest(),
-      size: AdSize.banner,
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          setState(() {
-            _isBannerAdReady = true;
-            _loadAttempts = 0;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          _isBannerAdReady = false;
-          _loadAttempts += 1;
-          debugPrint('[Onboarding] Banner failed to load: $error (attempt $_loadAttempts)');
-          if (_loadAttempts <= _maxLoadAttempts) {
-            final delaySeconds = 1 << (_loadAttempts - 1); // 1,2,4
-            Future.delayed(Duration(seconds: delaySeconds), _loadBannerAd);
-          } else {
-            debugPrint('[Onboarding] Banner: giving up after $_loadAttempts attempts.');
-          }
-          setState(() {});
-        },
-      ),
-    );
 
-    _bannerAd!.load();
-  }
+  // Ad loading handled by BannerAdWidget
 
   @override
   void dispose() {
-    _bannerAd?.dispose();
     _pageController.dispose();
     super.dispose();
   }
@@ -110,7 +64,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     } else {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => BottomNavShell()),
+        MaterialPageRoute(builder: (_) => const InitialPermissionsScreen()),
       );
     }
   }
@@ -144,10 +98,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       },
     ];
 
-    // Ad height (0 if not ready)
-    final adHeight = _isBannerAdReady && _bannerAd != null
-        ? _bannerAd!.size.height.toDouble()
-        : 0.0;
+    const adHeight = 50.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -307,24 +258,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // ---------- Banner Ad spot: shows nothing until ad is ready ----------
-            if (adHeight > 0 && _bannerAd != null)
-              Positioned(
-                left: 0,
-                right: 0,
-                bottom: 0,
-                child: SizedBox(
-                  width: double.infinity,
-                  height: adHeight,
-                  child: Center(
-                    child: SizedBox(
-                      width: _bannerAd!.size.width.toDouble(),
-                      height: _bannerAd!.size.height.toDouble(),
-                      child: AdWidget(ad: _bannerAd!),
-                    ),
-                  ),
-                ),
-              ),
+            const Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: BannerAdWidget(),
+            ),
           ],
         ),
       ),

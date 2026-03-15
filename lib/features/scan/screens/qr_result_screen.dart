@@ -5,6 +5,7 @@
 // generic "Scanned value" for product barcodes. Falls back to product
 // code / raw value when brand/product name are not available.
 
+import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -19,15 +20,19 @@ import 'package:securescan/services/language_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:securescan/l10n/app_localizations.dart';
-
-import '../../../widgets/bottom_nav_shell.dart';
-import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:securescan/services/ad_manager.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
+import 'package:securescan/core/models/history_item.dart';
+import 'package:securescan/core/enums/qr_type.dart';
+import 'package:securescan/core/repositories/history_repository.dart';
 import 'package:securescan/services/product_service.dart';
-import 'scan_screen_qr.dart'; 
+import 'package:securescan/widgets/bottom_nav_shell.dart';
+import 'package:securescan/features/scan/services/scanner_service.dart';
+
+
 
 class QrResultScreen extends StatefulWidget {
-  final QrResultData result;
+  final HistoryItem result;
 
   const QrResultScreen({super.key, required this.result});
 
@@ -43,8 +48,8 @@ class _QrResultScreenState extends State<QrResultScreen> {
   @override
   void initState() {
     super.initState();
-    _currentData = widget.result.data != null
-        ? Map<String, dynamic>.from(widget.result.data!)
+    _currentData = widget.result.metadata != null
+        ? Map<String, dynamic>.from(widget.result.metadata!)
         : {};
 
     // If it's a product and we don't have brand/name info, fetch it now
@@ -60,7 +65,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
     setState(() => _isLoadingProduct = true);
 
     try {
-      final code = _currentData['code'] ?? widget.result.raw;
+      final code = _currentData['code'] ?? widget.result.value;
       final info = await ProductService.fetchProductInfo(code.toString());
       if (info != null && mounted) {
         setState(() {
@@ -80,25 +85,17 @@ class _QrResultScreenState extends State<QrResultScreen> {
 
   Future<void> _updateHistoryInBackground() async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList('scan_history') ?? [];
-      if (list.isEmpty) return;
-
-      // Find this item in history and update it
-      // Note: This is an optimization, we don't strictly NEED to update history,
-      // but it's nice for the history screen later.
-      for (int i = list.length - 1; i >= 0; i--) {
-        final map = jsonDecode(list[i]);
-        if (map['raw'] == widget.result.raw && 
-            (map['ts'] == widget.result.timestamp.toIso8601String() || i == list.length - 1)) {
-          final payloadData = map['data'] != null ? Map<String, dynamic>.from(map['data']) : <String, dynamic>{};
-          payloadData.addAll(_currentData);
-          map['data'] = payloadData;
-          list[i] = jsonEncode(map);
-          await prefs.setStringList('scan_history', list);
-          break;
-        }
-      }
+      final updatedItem = HistoryItem(
+        id: widget.result.id,
+        type: widget.result.type,
+        value: widget.result.value,
+        timestamp: widget.result.timestamp,
+        metadata: {...?widget.result.metadata, ..._currentData},
+        imagePath: widget.result.imagePath,
+        isCreated: widget.result.isCreated,
+        displayValue: widget.result.displayValue,
+      );
+      await HistoryRepository.instance.saveScanItem(updatedItem);
     } catch (_) {}
   }
 
@@ -107,12 +104,12 @@ class _QrResultScreenState extends State<QrResultScreen> {
       if (_currentData['isIsbn'] == true) return true;
       if (_currentData['isProduct'] == true) return true;
 
-      final fmt = (widget.result.format ?? '').toLowerCase();
+      final fmt = (widget.result.metadata?['format'] ?? '').toLowerCase();
       if (fmt.contains('ean') || fmt.contains('upc') || fmt.contains('isbn')) {
         return true;
       }
 
-      final raw = widget.result.raw.trim();
+      final raw = widget.result.value.trim();
       final digitOnly = RegExp(r'^\d+$').hasMatch(raw);
       if (digitOnly &&
           (raw.length == 8 ||
@@ -125,26 +122,24 @@ class _QrResultScreenState extends State<QrResultScreen> {
     return false;
   }
 
-  bool get _isUrl => widget.result.kind == 'url';
-  bool get _isProduct => widget.result.kind == 'product' || _looksLikeProductBarcode();
-  bool get _isPhone => widget.result.kind == 'phone' && !_looksLikeProductBarcode();
-  bool get _isEmail => widget.result.kind == 'email';
-  bool get _isWifi => widget.result.kind == 'wifi';
-  bool get _isVCard => widget.result.kind == 'vcard';
-  bool get _isCalendar => widget.result.kind == 'calendar';
-  bool get _isGeo => widget.result.kind == 'geo';
-  bool get _isJson => widget.result.kind == 'json';
-  bool get _isText => widget.result.kind == 'text';
+  bool get _isUrl => widget.result.type == QrType.url;
+  bool get _isProduct => widget.result.type == QrType.product;
+  bool get _isPhone => widget.result.type == QrType.phone;
+  bool get _isEmail => widget.result.type == QrType.email;
+  bool get _isWifi => widget.result.type == QrType.wifi;
+  bool get _isVCard => widget.result.type == QrType.contact;
+  bool get _isCalendar => widget.result.type == QrType.calendar;
+  bool get _isGeo => widget.result.type == QrType.location;
+  bool get _isJson => false; // handled by text/metadata generally
+  bool get _isText => widget.result.type == QrType.text;
 
-  String get _bannerUnitId => kDebugMode 
-      ? 'ca-app-pub-3940256099942544/6300978111' 
-      : 'ca-app-pub-4377808055186677/5171383893';
+// Unit IDs managed in AdManager
 
   @override
   Widget build(BuildContext context) {
     FirebaseAnalytics.instance.logScreenView(
       screenName: 'QrResultScreen',
-      parameters: {'result_type': widget.result.kind},
+      parameters: {'result_type': widget.result.type.name},
     );
 
     final theme = Theme.of(context);
@@ -206,10 +201,10 @@ class _QrResultScreenState extends State<QrResultScreen> {
               const SizedBox(height: 16),
               _ctaRow(context, textTheme),
               const SizedBox(height: 16),
-              _adSpace(),
-              if (widget.result.imageBytes != null) ...[
+              const BannerAdWidget(),
+              if (widget.result.imageBytes != null || widget.result.imagePath != null) ...[
                 const SizedBox(height: 16),
-                _capturedImageSection(textTheme, widget.result.imageBytes!),
+                _capturedImageSection(textTheme),
               ],
             ],
           ),
@@ -253,14 +248,14 @@ class _QrResultScreenState extends State<QrResultScreen> {
   Widget _headerCard(BuildContext context, TextTheme textTheme) {
     final l10n = AppLocalizations.of(context)!;
     final typeLabel = _typeLabel(context);
-    final formatLabel = widget.result.format ?? 'Unknown format';
+    final formatLabel = widget.result.metadata?['format'] ?? 'Unknown format';
     final timeStr = _formatTimestamp(widget.result.timestamp);
 
     IconData leadingIcon;
     if (_isProduct) {
       leadingIcon = Icons.inventory_2;
     } else {
-      switch (widget.result.kind) {
+      switch (widget.result.type.name) {
         case 'url':
           leadingIcon = Icons.public;
           break;
@@ -345,12 +340,12 @@ class _QrResultScreenState extends State<QrResultScreen> {
   String _typeLabel(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     // If it's an ISBN, prefer "Book"
-    final isIsbn = (widget.result.data?['isIsbn'] == true);
+    final isIsbn = (widget.result.metadata?['isIsbn'] == true);
     if (isIsbn) return l10n.book;
 
     if (_isProduct) return l10n.product;
 
-    switch (widget.result.kind) {
+    switch (widget.result.type.name) {
       case 'url':
         return l10n.website;
       case 'phone':
@@ -379,7 +374,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
 
   // -------------------- Value card --------------------
   //
-  // UPDATED: prefer widget.result.data['brand'] / ['product_name'] for products.
+  // UPDATED: prefer widget.result.metadata['brand'] / ['product_name'] for products.
   // Show a clear fallback order:
   //  - brand (primary)
   //  - product_name (secondary)
@@ -397,7 +392,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
     if (_isProduct) {
       final brand = (_currentData['brand'] as String?)?.trim();
       final productName = (_currentData['product_name'] as String?)?.trim();
-      final code = _currentData['code'] ?? widget.result.raw;
+      final code = _currentData['code'] ?? widget.result.value;
 
       if (brand != null && brand.isNotEmpty) {
         title = l10n.brand;
@@ -420,7 +415,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
       mainLine = _currentData['mailto'] as String;
     } else {
       title = l10n.scannedValue;
-      mainLine = widget.result.raw;
+      mainLine = widget.result.value;
     }
 
     return Container(
@@ -720,8 +715,8 @@ class _QrResultScreenState extends State<QrResultScreen> {
 
   Future<void> _onShopNow(BuildContext context) async {
     final query = _isProduct
-        ? (widget.result.data?['code'] ?? widget.result.raw).toString()
-        : widget.result.raw;
+        ? (widget.result.metadata?['code'] ?? widget.result.value).toString()
+        : widget.result.value;
 
     final uri = Uri.https('www.google.com', '/search', {
       'q': query,
@@ -795,7 +790,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
   }
 
   Future<void> _onCopyWifiPassword(BuildContext context) async {
-    final pass = (widget.result.data?['password'] ?? '') as String;
+    final pass = (widget.result.metadata?['password'] ?? '') as String;
     final text = pass.isEmpty ? _displayValueForSearch() : pass;
     await Clipboard.setData(ClipboardData(text: text));
     ScaffoldMessenger.of(
@@ -861,11 +856,11 @@ class _QrResultScreenState extends State<QrResultScreen> {
   }
 
   Future<void> _onOpenMap(BuildContext context) async {
-    double? lat = widget.result.data?['lat'] is num
-        ? (widget.result.data!['lat'] as num).toDouble()
+    double? lat = widget.result.metadata?['lat'] is num
+        ? (widget.result.metadata!['lat'] as num).toDouble()
         : null;
-    double? lng = widget.result.data?['lng'] is num
-        ? (widget.result.data!['lng'] as num).toDouble()
+    double? lng = widget.result.metadata?['lng'] is num
+        ? (widget.result.metadata!['lng'] as num).toDouble()
         : null;
 
     Uri uri;
@@ -907,33 +902,22 @@ class _QrResultScreenState extends State<QrResultScreen> {
 
   // -------------------- Ad + image --------------------
 
-  Widget _adSpace() {
-    final BannerAd banner = BannerAd(
-      adUnitId: _bannerUnitId,
-      size: AdSize.banner,
-      request: const AdRequest(),
-      listener: BannerAdListener(
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-        },
-      ),
-    );
-
-    banner.load();
-
-    return Container(
-      width: double.infinity,
-      height: banner.size.height.toDouble(),
-      alignment: Alignment.center,
-      child: AdWidget(ad: banner),
-    );
-  }
+  // Ad space widget now handled by BannerAdWidget
 
 
 
   // -------------------- Captured Image --------------------
 
-  Widget _capturedImageSection(TextTheme textTheme, Uint8List bytes) {
+  Widget _capturedImageSection(TextTheme textTheme) {
+    Widget image;
+    if (widget.result.imageBytes != null) {
+      image = Image.memory(widget.result.imageBytes!, fit: BoxFit.cover);
+    } else if (widget.result.imagePath != null && File(widget.result.imagePath!).existsSync()) {
+      image = Image.file(File(widget.result.imagePath!), fit: BoxFit.cover);
+    } else {
+      return const SizedBox.shrink();
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -947,10 +931,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
           child: SizedBox(
             width: double.infinity,
             height: 220,
-            child: Image.memory(
-              bytes,
-              fit: BoxFit.cover,
-            ),
+            child: image,
           ),
         ),
       ],
@@ -963,9 +944,9 @@ class _QrResultScreenState extends State<QrResultScreen> {
   // for product results because that is more useful to users when searching.
   String _displayValueForSearch() {
     if (_isProduct) {
-      final brand = (widget.result.data?['brand'] as String?)?.trim();
-      final productName = (widget.result.data?['product_name'] as String?)?.trim();
-      final code = widget.result.data?['code'] ?? widget.result.raw;
+      final brand = (widget.result.metadata?['brand'] as String?)?.trim();
+      final productName = (widget.result.metadata?['product_name'] as String?)?.trim();
+      final code = widget.result.metadata?['code'] ?? widget.result.value;
 
       if (brand != null &&
           brand.isNotEmpty &&
@@ -975,14 +956,14 @@ class _QrResultScreenState extends State<QrResultScreen> {
       }
       if (brand != null && brand.isNotEmpty) return brand;
       if (productName != null && productName.isNotEmpty) return productName;
-      return code?.toString() ?? widget.result.raw;
+      return code?.toString() ?? widget.result.value;
     }
 
-    if (_isEmail && widget.result.data?['mailto'] is String) {
-      return widget.result.data!['mailto'] as String;
+    if (_isEmail && widget.result.metadata?['mailto'] is String) {
+      return widget.result.metadata!['mailto'] as String;
     }
 
-    return widget.result.raw;
+    return widget.result.value;
   }
 }
 

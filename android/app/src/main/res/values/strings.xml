@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        Facebook Audience Network App ID.
+        Replace "0" with your real Facebook App ID from
+        https://developers.facebook.com/apps/ before going to production.
+        Only required because the Facebook mediation adapter
+        (com.google.ads.mediation:facebook) declares this meta-data in its
+        AndroidManifest, which is merged into the app manifest at build time.
+    -->
+    <string name="facebook_app_id">0</string>
+
+    <!--
+        Facebook Client Token — also required by recent Facebook SDK versions.
+        Replace with your real client token from:
+        Facebook Developer Console → Your App → Settings → Advanced → Client Token
+    -->
+    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
+</resources>

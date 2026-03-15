@@ -1,9 +1,16 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/themes.dart';
 
 class MyQrScreen extends StatefulWidget {
   const MyQrScreen({super.key});
@@ -277,10 +284,14 @@ END:VCARD
                 ),
               ],
             ),
-            child: QrImageView(
-              data: _qrData!,
-              version: QrVersions.auto,
-              size: 230,
+            child: RepaintBoundary(
+              key: _qrKey,
+              child: QrImageView(
+                data: _qrData!,
+                version: QrVersions.auto,
+                size: 230,
+                backgroundColor: Colors.white,
+              ),
             ),
           ),
         ),
@@ -289,7 +300,9 @@ END:VCARD
         // Contact details under QR
         Card(
           elevation: 0,
-          color: Colors.grey.shade100,
+          color: Theme.of(context).brightness == Brightness.dark 
+              ? Colors.grey.shade900 
+              : Colors.grey.shade100,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
@@ -302,26 +315,33 @@ END:VCARD
                   name,
                   style: textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 4),
                 if (phone.isNotEmpty)
                   Text(
                     phone,
-                    style: textTheme.bodyMedium,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 if (email.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     email,
-                    style: textTheme.bodyMedium,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ],
                 if (company.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     company,
-                    style: textTheme.bodyMedium,
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurface,
+                    ),
                   ),
                 ],
               ],
@@ -330,6 +350,41 @@ END:VCARD
         ),
 
         const Spacer(),
+
+        // Actions Row
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _downloadQR,
+                  icon: const Icon(Icons.download, color: Colors.white),
+                  label: Text(l10n.download.toUpperCase(), style: const TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SecureScanTheme.accentBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: _shareQR,
+                  icon: const Icon(Icons.share, color: Colors.white),
+                  label: Text(l10n.share.toUpperCase(), style: const TextStyle(color: Colors.white)),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: SecureScanTheme.accentBlue,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
 
         SizedBox(
           width: double.infinity,
@@ -341,9 +396,84 @@ END:VCARD
             },
             icon: const Icon(Icons.edit),
             label: Text(l10n.editContact),
+            style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              side: const BorderSide(color: SecureScanTheme.accentBlue),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  final GlobalKey _qrKey = GlobalKey();
+
+  Future<void> _downloadQR() async {
+    try {
+      final boundary = _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = 'my_qr_$timestamp.png';
+
+      // Save to gallery
+      await Gal.putImageBytes(pngBytes, album: 'SecureScanner');
+
+      if (mounted) {
+        _showSuccessDialog(l10n: AppLocalizations.of(context)!, filename: filename);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    }
+  }
+
+  Future<void> _shareQR() async {
+    try {
+      final boundary = _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final pngBytes = byteData!.buffer.asUint8List();
+
+      final tempDir = await getTemporaryDirectory();
+      final file = await File('${tempDir.path}/shared_qr.png').create();
+      await file.writeAsBytes(pngBytes);
+      
+      await Share.shareXFiles([XFile(file.path)], text: AppLocalizations.of(context)!.myGeneratedQr);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Error: $e")),
+        );
+      }
+    }
+  }
+
+  void _showSuccessDialog({required AppLocalizations l10n, required String filename}) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 4),
+            Text("Download Successful",style: TextStyle(fontSize: 14),),
+          ],
+        ),
+        content: Text(l10n.qrSaved(filename)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.close),
+          ),
+        ],
+      ),
     );
   }
 }

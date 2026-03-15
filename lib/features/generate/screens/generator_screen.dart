@@ -1,9 +1,5 @@
-// generator_screen.dart
 import 'dart:io';
 import 'dart:ui' as ui;
-import 'dart:typed_data';
-import 'dart:async';
-import 'package:intl_phone_field/intl_phone_field.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,1325 +9,696 @@ import 'package:flutter_native_contact_picker/model/contact.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:gal/gal.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/services/ad_manager.dart';
+import 'package:securescan/core/enums/qr_type.dart';
+import 'package:securescan/features/generate/controllers/generator_controller.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 import '../../../themes.dart';
 
 class CreateQRScreen extends StatelessWidget {
-  List<Map<String, dynamic>> _getItems(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return [
-      {'icon': Icons.content_paste, 'title': l10n.clipboardContent, 'key': 'Content from clipboard'},
-      {'icon': Icons.link, 'title': l10n.url, 'key': 'URL'},
-      {'icon': Icons.text_fields, 'title': l10n.text, 'key': 'Text'},
-      {'icon': Icons.person_outline, 'title': l10n.contact, 'key': 'Contact'},
-      {'icon': Icons.email_outlined, 'title': l10n.email, 'key': 'Email'},
-      {'icon': Icons.phone_outlined, 'title': l10n.phone, 'key': 'Phone'},
-      {'icon': Icons.wifi, 'title': l10n.wifi, 'key': 'Wifi'},
-    ];
-  }
+  const CreateQRScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
-
     final l10n = AppLocalizations.of(context)!;
-    final items = _getItems(context);
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final categories = [
+      {'icon': Icons.link, 'type': QrType.url, 'title': l10n.url},
+      {'icon': Icons.wifi, 'type': QrType.wifi, 'title': l10n.wifi},
+      {'icon': Icons.contact_page, 'type': QrType.contact, 'title': l10n.contact},
+      {'icon': Icons.phone, 'type': QrType.phone, 'title': l10n.phone},
+      {'icon': Icons.email, 'type': QrType.email, 'title': l10n.email},
+      {'icon': Icons.text_snippet, 'type': QrType.text, 'title': l10n.text},
+      {'icon': Icons.keyboard, 'type': QrType.text, 'title': "Keyboard Content"},
+      {'icon': Icons.calendar_today, 'type': QrType.calendar, 'title': l10n.calendar},
+      {'icon': Icons.location_on, 'type': QrType.location, 'title': l10n.location},
+    ];
 
     return Scaffold(
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: colorScheme.onBackground),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(l10n.create, style: textTheme.titleLarge),
+        title: Text(l10n.createQrCode),
         centerTitle: true,
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        iconTheme: theme.appBarTheme.iconTheme,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-            color: colorScheme.surface,
-            child: Text(
-              l10n.createQr,
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurface,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
+      body: GridView.builder(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 1.15,
+          mainAxisSpacing: 16,
+          crossAxisSpacing: 16,
+        ),
+        itemCount: categories.length,
+        itemBuilder: (context, index) {
+          final item = categories[index];
+          return _CategoryCard(
+            icon: item['icon'] as IconData,
+            title: item['title'] as String,
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CreateQRCodePage(
+                    selectedType: item['type'] as QrType,
+                    displayType: item['title'] as String,
+                  ),
+                ),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+}
 
-          // List
-          Expanded(
-            child: ListView.separated(
-              itemCount: items.length,
-              separatorBuilder: (_, __) =>
-                  Divider(height: 1, color: colorScheme.outline),
-              itemBuilder: (context, index) {
-                final item = items[index];
-                return ListTile(
-                  leading: Icon(
-                    item['icon'],
-                    size: 26,
-                    color: colorScheme.primary,
-                  ),
-                  title: Text(
-                    item['title'],
-                    style: textTheme.bodyLarge?.copyWith(
-                      color: colorScheme.onBackground,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  trailing: Icon(
-                    Icons.chevron_right,
-                    color: colorScheme.onSurface,
-                  ),
-                  onTap: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => (CreateQRCodePage(
-                          selectedType: item['key'],
-                          displayType: item['title'],
-                        )),
-                      ),
-                    );
-                  },
-                  tileColor: colorScheme.surface,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 4,
-                  ),
-                );
-              },
+class _CategoryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final VoidCallback onTap;
+
+  const _CategoryCard({required this.icon, required this.title, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? colorScheme.surface : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: colorScheme.outline.withOpacity(0.1)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
             ),
-          ),
-          Divider(color: colorScheme.outline),
-        ],
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: SecureScanTheme.accentBlue.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: SecureScanTheme.accentBlue, size: 28),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, letterSpacing: 0.2),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class CreateQRCodePage extends StatefulWidget {
-  const CreateQRCodePage({super.key, required this.selectedType, required this.displayType});
-
-  final String selectedType;
+  final QrType selectedType;
   final String displayType;
+
+  const CreateQRCodePage({super.key, required this.selectedType, required this.displayType});
 
   @override
   State<CreateQRCodePage> createState() => _CreateQRCodePageState();
 }
 
 class _CreateQRCodePageState extends State<CreateQRCodePage> {
-  late String selectedType = widget.selectedType;
-  late String displayType = widget.displayType;
-  bool isCreated = false;
-  String qrData = "";
-
-  // Controllers
-  final nameController = TextEditingController();
-  final phoneController = TextEditingController();
-  final emailController = TextEditingController();
-  final companyController = TextEditingController();
-  final designationController = TextEditingController();
-  final addressController = TextEditingController();
-  final urlNameController = TextEditingController();
-  final urlLinkController = TextEditingController();
-  final wifiNameController = TextEditingController();
-  String encryptionValue = "WPA/WPA2";
-  final wifiPasswordController = TextEditingController();
-
+  late final GeneratorController _controller;
   final GlobalKey _qrKey = GlobalKey();
-
-  // UI state
-  bool _wifiPasswordVisible = false;
-
-  // Field error messages (shown below inputs)
-  String? _nameError;
-  String? _phoneError;
-  String? _emailError;
-  String? _urlNameError;
-  String? _urlLinkError;
-  String? _wifiNameError;
-  String? _wifiPasswordError;
-
-  // Contact picker instance
-  final FlutterNativeContactPicker _contactPicker =
-      FlutterNativeContactPicker();
-
-  // ---------------- Ads ----------------
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-  int _bannerLoadAttempts = 0;
-  static const int _maxBannerLoadAttempts = 3;
-
-  InterstitialAd? _interstitialAd;
-  bool _isInterstitialReady = false;
-  int _interstitialLoadAttempts = 0;
-  static const int _maxInterstitialLoadAttempts = 3;
-
-  // Test and production unit IDs
-  static const String _testBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-  static const String _prodBannerAdUnitId =
-      'ca-app-pub-4377808055186677/5698105305'; // replace with your banner id
-
-  static const String _testInterstitialAdUnitId =
-      'ca-app-pub-3940256099942544/1033173712';
-  static const String _prodInterstitialAdUnitId =
-      'ca-app-pub-4377808055186677/2712849317'; // replace with your interstitial id
-
-  String get _bannerUnitId =>
-      kDebugMode ? _testBannerAdUnitId : _prodBannerAdUnitId;
-  String get _interstitialUnitId =>
-      kDebugMode ? _testInterstitialAdUnitId : _prodInterstitialAdUnitId;
+  final FlutterNativeContactPicker _contactPicker = FlutterNativeContactPicker();
 
   @override
   void initState() {
     super.initState();
-    // Add listeners so we validate on change:
-    nameController.addListener(_onContactFieldChanged);
-    phoneController.addListener(_onContactFieldChanged);
-    emailController.addListener(_onContactFieldChanged);
-    urlNameController.addListener(_onUrlFieldChanged);
-    urlLinkController.addListener(_onUrlFieldChanged);
-    wifiNameController.addListener(_onWifiFieldChanged);
-    wifiPasswordController.addListener(_onWifiFieldChanged);
+    _controller = GeneratorController(widget.selectedType);
+    AdManager.instance.loadInterstitialAd();
 
-    // Ensure URL field has https:// by default if empty and type is URL
-    if (selectedType == "URL" && urlLinkController.text.isEmpty) {
-      urlLinkController.text = 'https://';
-      urlLinkController.selection = TextSelection.fromPosition(
-        TextPosition(offset: urlLinkController.text.length),
-      );
-    }
-
-    // Load ads
-    _loadBannerAd();
-    _loadInterstitial();
-  }
-
-  // -------------------- SharedPreferences helpers --------------------
-  Future<void> _saveCreatedEntry({
-    required String type,
-    required String value,
-  }) async {
-    final prefs = await SharedPreferences.getInstance();
-    final nowStr = _formatNow();
-
-    final line = "$type, $value, $nowStr";
-    final list = prefs.getStringList('created_history') ?? [];
-
-    list.insert(0, line); // newest first
-    await prefs.setStringList('created_history', list);
-  }
-
-  String _formatNow() {
-    final now = DateTime.now();
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final d = now.day.toString().padLeft(2, '0');
-    final m = months[now.month - 1];
-    final y = now.year.toString();
-    int hour = now.hour;
-    final min = now.minute.toString().padLeft(2, '0');
-    final ampm = hour >= 12 ? 'pm' : 'am';
-    hour = hour % 12;
-    if (hour == 0) hour = 12;
-    return "$d $m $y | $hour:$min $ampm";
-  }
-
-  // -------------------- Validation helpers --------------------
-
-  // email: relaxed but practical
-  // email: standard regex
-  static final RegExp _emailReg = RegExp(
-    r"^[a-zA-Z0-9.a-zA-Z0-9.!#$%&'*+-/=?^_`{|}~]+@[a-zA-Z0-9]+\.[a-zA-Z]+",
-  );
-
-  // phone: exactly 10 digits
-  String? _completePhoneNumber; // +919876543210
-  bool _isPhoneValid = false;
-
-  bool _validateContact({bool setStateErrors = true}) {
-    var ok = true;
-
-    final name = nameController.text.trim();
-    final email = emailController.text.trim();
-
-    final l10n = AppLocalizations.of(context)!;
-    final nameErr = name.isEmpty ? l10n.nameRequired : null;
-    final phoneErr = (_completePhoneNumber == null || !_isPhoneValid)
-        ? l10n.phoneRequired
-        : null;
-
-    final emailErr = email.isEmpty
-        ? l10n.emailRequired
-        : (!_emailReg.hasMatch(email) ? l10n.emailRequired : null);
-
-    if (setStateErrors) {
-      setState(() {
-        _nameError = nameErr;
-        _phoneError = phoneErr;
-        _emailError = emailErr;
+    // Auto-paste if it's "Keyboard Content"
+    if (widget.displayType == "Keyboard Content") {
+      Clipboard.getData(Clipboard.kTextPlain).then((data) {
+        if (data != null && data.text != null && mounted) {
+          _controller.textController.text = data.text!;
+          _controller.validate(AppLocalizations.of(context)!);
+        }
       });
-    }
-
-    if (nameErr != null || phoneErr != null || emailErr != null) ok = false;
-    return ok;
-  }
-
-  bool _validateEmail({bool setStateErrors = true}) {
-    var ok = true;
-    final email = emailController.text.trim();
-
-    String? emailErr;
-    if (email.isEmpty) {
-      emailErr = "Email is required";
-    } else if (!_emailReg.hasMatch(email)) {
-      emailErr = "Enter a valid email";
-    }
-
-    if (setStateErrors) {
-      setState(() {
-        _emailError = emailErr;
-      });
-    }
-
-    if (emailErr != null) ok = false;
-    return ok;
-  }
-
-  bool _validateUrl({bool setStateErrors = true}) {
-    var ok = true;
-    final name = urlNameController.text.trim();
-    final link = urlLinkController.text.trim();
-
-    final l10n = AppLocalizations.of(context)!;
-    final nameErr = name.isEmpty ? l10n.nameRequired : null;
-
-    String? linkErr;
-    if (link.isEmpty) {
-      linkErr = l10n.linkRequired;
-    } else {
-      final l = link.toLowerCase();
-      if (!l.contains('.') && !l.startsWith('http'))
-        linkErr = l10n.validLinkRequired;
-    }
-
-    if (setStateErrors) {
-      setState(() {
-        _urlNameError = nameErr;
-        _urlLinkError = linkErr;
-      });
-    }
-
-    if (nameErr != null || linkErr != null) ok = false;
-    return ok;
-  }
-
-  bool _validateWifi({bool setStateErrors = true}) {
-    var ok = true;
-    final ssid = wifiNameController.text.trim();
-    final pass = wifiPasswordController.text;
-
-    final l10n = AppLocalizations.of(context)!;
-    final ssidErr = ssid.isEmpty ? l10n.ssidRequired : null;
-
-    String? passErr;
-    if (encryptionValue.toLowerCase() != 'none') {
-      if (pass.isEmpty) {
-        passErr = l10n.passwordRequired;
-      } else if (pass.length < 8) {
-        passErr = l10n.passwordMinLength;
-      }
-    }
-
-    if (setStateErrors) {
-      setState(() {
-        _wifiNameError = ssidErr;
-        _wifiPasswordError = passErr;
-      });
-    }
-
-    if (ssidErr != null || passErr != null) ok = false;
-    return ok;
-  }
-
-  void _onContactFieldChanged() {
-    // Run live validation for contact fields only
-    if (selectedType == "Contact") {
-      _validateContact();
-    }
-    setState(() {}); // refresh button enabled state
-  }
-
-  void _onUrlFieldChanged() {
-    if (selectedType == "URL") _validateUrl();
-    setState(() {});
-  }
-
-  void _onWifiFieldChanged() {
-    if (selectedType == "Wifi") _validateWifi();
-    setState(() {});
-  }
-
-  bool get _canCreate {
-    if (selectedType == "Contact") {
-      return _validateContact(setStateErrors: false);
-    } else if (selectedType == "URL") {
-      return _validateUrl(setStateErrors: false);
-    } else if (selectedType == "Wifi") {
-      return _validateWifi(setStateErrors: false);
-    } else if (selectedType == "Phone") {
-      return _completePhoneNumber != null && _isPhoneValid;
-    } else {
-      return true;
-    }
-  }
-
-  // -------------------- Contact picker flow (flutter_native_contact_picker) -----
-  /// Opens native contact picker, extracts name & phone, populates form,
-  /// immediately builds the MECARD payload, saves to history and navigates
-  /// to the QrResultScreen.
-  Future<void> _pickContactFromDevice() async {
-    try {
-      // Show native contact picker (user picks one contact)
-      final Contact? contact = await _contactPicker.selectContact();
-
-      if (contact == null) return; // user cancelled
-
-      // Extract best-effort fields from returned contact
-      final name = contact.fullName ?? '';
-      String phone = '';
-
-      // flutter_native_contact_picker may return phoneNumbers as List<String>
-      if (contact.phoneNumbers != null && contact.phoneNumbers!.isNotEmpty) {
-        phone = contact.phoneNumbers!.first;
-      } else if (contact.selectedPhoneNumber != null &&
-          contact.selectedPhoneNumber!.isNotEmpty) {
-        phone = contact.selectedPhoneNumber!;
-      }
-
-      // Normalize phone: strip non-digits and keep last 10 digits (common approach)
-      phoneController.text = phone; // let intl_phone_field handle it
-      _completePhoneNumber = phone;
-
-      // Populate form fields (email often isn't provided by this picker)
-      if (name.isNotEmpty) nameController.text = name;
-
-      // NOTE: we intentionally DO NOT navigate away.
-      // Build MECARD payload (exact same format used by the generator backend)
-      final company = companyController.text.trim();
-      final designation = designationController.text.trim();
-      final address = addressController.text.trim();
-
-      final mec = StringBuffer();
-      mec.write('MECARD:');
-      mec.write('N:${nameController.text};');
-      mec.write('TEL:${phoneController.text};');
-      if (emailController.text.trim().isNotEmpty) {
-        mec.write('EMAIL:${emailController.text.trim()};');
-      }
-      if (company.isNotEmpty) mec.write('ORG:${company};');
-      if (designation.isNotEmpty) mec.write('TITLE:${designation};');
-      if (address.isNotEmpty) mec.write('ADR:${address};');
-      mec.write(';'); // terminate
-
-      final payload = mec.toString();
-
-      // Save to created history and update UI just like other create flows
-      await _saveCreatedEntry(type: 'Contact', value: payload);
-
-      if (!mounted) return;
-      setState(() {
-        qrData = payload;
-        isCreated = true; // show the generated QR UI in this same screen
-      });
-    } catch (e) {
-      // If user cancelled the picker some implementations throw a PlatformException with code 'CANCELED'
-      if (e is PlatformException && e.code == 'CANCELED') {
-        return;
-      }
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to pick contact: $e')));
-      }
-    }
-  }
-
-  // -------------------- Generate QR --------------------
-  // NOTE: This function now shows an interstitial (if ready) before revealing the result.
-  Future<void> _generateQRCode() async {
-    final l10n = AppLocalizations.of(context)!;
-    String qrData = "";
-    // Clear previous errors
-    setState(() {
-      _nameError = null;
-      _phoneError = null;
-      _emailError = null;
-      _urlNameError = null;
-      _urlLinkError = null;
-      _wifiNameError = null;
-      _wifiPasswordError = null;
-    });
-
-    if (selectedType == "Contact") {
-      final ok = _validateContact();
-      if (!ok) {
-        _showInlineError(AppLocalizations.of(context)!.fixErrors);
-        return;
-      }
-
-      final company = companyController.text.trim();
-      final designation = designationController.text.trim();
-      final address = addressController.text.trim();
-
-      qrData =
-          "MECARD:"
-          "N:${nameController.text};"
-          "TEL:${_completePhoneNumber};"
-          "EMAIL:${emailController.text};"
-          "ORG:${company};"
-          "TITLE:${designation};"
-          "ADR:${address};;";
-    } else if (selectedType == "Phone") {
-      // ✅ Phone-only QR (no name/email validation)
-      if (_completePhoneNumber == null || !_isPhoneValid) {
-        setState(() {
-          _phoneError = l10n.phoneRequired;
-        });
-        _showInlineError(l10n.phoneRequired);
-        return;
-      }
-
-      qrData = "tel:${_completePhoneNumber}";
-    } else if (selectedType == "URL") {
-      final ok = _validateUrl();
-      if (!ok) {
-        _showInlineError(AppLocalizations.of(context)!.validLinkRequired);
-        return;
-      }
-
-      var link = urlLinkController.text.trim();
-      if (!link.toLowerCase().startsWith('http')) {
-        link = "https://$link";
-      }
-      qrData = link;
-    } else if (selectedType == "Wifi") {
-      final ok = _validateWifi();
-      if (!ok) {
-        _showInlineError(AppLocalizations.of(context)!.fixErrors);
-        return;
-      }
-
-      final enc = encryptionValue == 'WPA/WPA2'
-          ? 'WPA'
-          : (encryptionValue == 'WEP' ? 'WEP' : 'nopass');
-      final pwd = wifiPasswordController.text;
-      if (encryptionValue.toLowerCase() == 'none' || enc == 'nopass') {
-        qrData = "WIFI:S:${wifiNameController.text};T:;P:;;";
-      } else {
-        qrData = "WIFI:S:${wifiNameController.text};T:${enc};P:${pwd};;";
-      }
-    } else if (selectedType == "Email") {
-      final ok = _validateEmail();
-      if (!ok) {
-        _showInlineError(AppLocalizations.of(context)!.emailRequired);
-        return;
-      }
-      qrData = "mailto:${emailController.text}";
-    } else if (selectedType == "Text" ||
-        selectedType == "Content from clipboard") {
-      if (designationController.text.isEmpty) {
-        _showInlineError(AppLocalizations.of(context)!.enterText);
-        return;
-      }
-      qrData = designationController.text;
-    }
-
-    // Save to created history first (same behaviour as before)
-    await _saveCreatedEntry(type: selectedType, value: qrData);
-
-    // Then show interstitial (if available) before revealing result
-    await _showInterstitialThenReveal();
-  }
-
-  Future<void> _showInterstitialThenReveal() async {
-    // If interstitial ready, show it and wait until dismissed (or timeout), then reveal.
-    if (_isInterstitialReady && _interstitialAd != null) {
-      try {
-        final completer = Completer<void>();
-        // Setup a temporary listener for dismissal
-        _interstitialAd!.fullScreenContentCallback = FullScreenContentCallback(
-          onAdShowedFullScreenContent: (ad) {
-            debugPrint('[Ads] interstitial showed');
-          },
-          onAdDismissedFullScreenContent: (ad) {
-            debugPrint('[Ads] interstitial dismissed');
-            ad.dispose();
-            _interstitialAd = null;
-            _isInterstitialReady = false;
-            // preload next one
-            _loadInterstitial();
-            if (!completer.isCompleted) completer.complete();
-          },
-          onAdFailedToShowFullScreenContent: (ad, error) {
-            debugPrint('[Ads] interstitial failed to show: $error');
-            ad.dispose();
-            _interstitialAd = null;
-            _isInterstitialReady = false;
-            _loadInterstitial();
-            if (!completer.isCompleted) completer.complete();
-          },
-        );
-
-        _interstitialAd!.show();
-
-        // safety timeout in case ad never dismisses/callback doesn't fire
-        final timer = Timer(const Duration(seconds: 10), () {
-          if (!completer.isCompleted) completer.complete();
-        });
-
-        await completer.future;
-        timer.cancel();
-      } catch (e) {
-        debugPrint('[Ads] error showing interstitial: $e');
-      }
-    }
-
-    // Reveal the generated QR (same behavior as original)
-    if (!mounted) return;
-    setState(() {
-      isCreated = true;
-    });
-  }
-
-  void _showInlineError(String msg) {
-    // kept for unexpected cases; prefer per-field errors above
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.redAccent),
-    );
-  }
-
-  // -------------------- Download / Share --------------------
-  Future<void> _downloadQR() async {
-    try {
-      RenderRepaintBoundary boundary =
-          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      Uint8List pngBytes = byteData!.buffer.asUint8List();
-
-      final directory = await getApplicationDocumentsDirectory();
-      final file = File(
-        '${directory.path}/qr_${DateTime.now().millisecondsSinceEpoch}.png',
-      );
-      await file.writeAsBytes(pngBytes);
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AppLocalizations.of(context)!.qrSaved(file.path.split('/').last)),
-          backgroundColor: SecureScanTheme.accentBlue,
-        ),
-      );
-    } catch (e) {
-      _showInlineError(AppLocalizations.of(context)!.errorSaving(e.toString()));
-    }
-  }
-
-  Future<void> _shareQR() async {
-    try {
-      RenderRepaintBoundary boundary =
-          _qrKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
-      ui.Image image = await boundary.toImage(pixelRatio: 3.0);
-      ByteData? byteData = await image.toByteData(
-        format: ui.ImageByteFormat.png,
-      );
-      Uint8List pngBytes = byteData!.buffer.asUint8List();
-
-      final tempDir = await getTemporaryDirectory();
-      final file = await File('${tempDir.path}/shared_qr.png').create();
-      await file.writeAsBytes(pngBytes);
-      await Share.shareXFiles([XFile(file.path)], text: AppLocalizations.of(context)!.myGeneratedQr);
-    } catch (e) {
-      _showInlineError(AppLocalizations.of(context)!.errorSharing(e.toString()));
     }
   }
 
   @override
   void dispose() {
-    nameController.dispose();
-    phoneController.dispose();
-    emailController.dispose();
-    companyController.dispose();
-    designationController.dispose();
-    addressController.dispose();
-    urlNameController.dispose();
-    urlLinkController.dispose();
-    wifiNameController.dispose();
-    wifiPasswordController.dispose();
-
-    _bannerAd?.dispose();
-    _interstitialAd?.dispose();
-
+    _controller.dispose();
     super.dispose();
   }
 
-  // -------------------- Ad loading --------------------
+  Future<void> _pickContactFromDevice() async {
+    try {
+      final Contact? contact = await _contactPicker.selectContact();
+      if (contact == null) return;
 
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _bannerUnitId,
-      request: const AdRequest(),
-      size: AdSize.banner,
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          setState(() {
-            _isBannerAdReady = true;
-            _bannerLoadAttempts = 0;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          _isBannerAdReady = false;
-          _bannerLoadAttempts += 1;
-          debugPrint(
-            '[Ads] Banner failed to load: $error (attempt $_bannerLoadAttempts)',
-          );
-          if (_bannerLoadAttempts <= _maxBannerLoadAttempts) {
-            final delaySeconds = 1 << (_bannerLoadAttempts - 1);
-            Future.delayed(Duration(seconds: delaySeconds), _loadBannerAd);
-          }
-        },
-      ),
-    );
-    _bannerAd!.load();
+      final name = contact.fullName ?? '';
+      String phone = '';
+      if (contact.phoneNumbers != null && contact.phoneNumbers!.isNotEmpty) {
+        phone = contact.phoneNumbers!.first;
+      } else if (contact.selectedPhoneNumber != null && contact.selectedPhoneNumber!.isNotEmpty) {
+        phone = contact.selectedPhoneNumber!;
+      }
+
+      _controller.nameController.text = name;
+      _controller.phoneController.text = phone;
+      
+      final l10n = AppLocalizations.of(context)!;
+      await _controller.generateQRCode(l10n);
+    } catch (e) {
+      if (e is PlatformException && e.code == 'CANCELED') return;
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to pick contact: $e')));
+      }
+    }
   }
 
-  void _loadInterstitial() {
-    _interstitialAd?.dispose();
-    _interstitialAd = null;
-    _isInterstitialReady = false;
-
-    InterstitialAd.load(
-      adUnitId: _interstitialUnitId,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (InterstitialAd ad) {
-          _interstitialLoadAttempts = 0;
-          _interstitialAd = ad;
-          _isInterstitialReady = true;
-
-          // set a basic fullscreen callback to reload next ad when dismissed
-          _interstitialAd!.fullScreenContentCallback =
-              FullScreenContentCallback(
-                onAdShowedFullScreenContent: (ad) =>
-                    debugPrint('[Ads] Interstitial shown.'),
-                onAdDismissedFullScreenContent: (ad) {
-                  ad.dispose();
-                  _interstitialAd = null;
-                  _isInterstitialReady = false;
-                  _loadInterstitial();
-                },
-                onAdFailedToShowFullScreenContent: (ad, error) {
-                  debugPrint('[Ads] Interstitial failed to show: $error');
-                  ad.dispose();
-                  _interstitialAd = null;
-                  _isInterstitialReady = false;
-                  _loadInterstitial();
-                },
-              );
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          _interstitialLoadAttempts += 1;
-          _isInterstitialReady = false;
-          debugPrint(
-            '[Ads] Interstitial failed to load: $error (attempt $_interstitialLoadAttempts)',
-          );
-          if (_interstitialLoadAttempts <= _maxInterstitialLoadAttempts) {
-            final backoff = Duration(
-              seconds: 1 << (_interstitialLoadAttempts - 1),
-            );
-            Future.delayed(backoff, _loadInterstitial);
-          }
-        },
-      ),
-    );
+  Future<void> _handleGenerate() async {
+    final l10n = AppLocalizations.of(context)!;
+    if (_controller.validate(l10n)) {
+      await AdManager.instance.showInterstitialAd();
+      await _controller.generateQRCode(l10n);
+    }
   }
 
-  // -------------------- UI --------------------
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final textTheme = theme.textTheme;
     final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
     final l10n = AppLocalizations.of(context)!;
-
-    final adHeight = _isBannerAdReady && _bannerAd != null
-        ? _bannerAd!.size.height.toDouble()
-        : 0.0;
 
     return Scaffold(
       backgroundColor: colorScheme.background,
       appBar: AppBar(
-        backgroundColor: colorScheme.background,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new, color: colorScheme.onBackground),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: Text(
-          l10n.createQrCode,
-          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w600),
-        ),
+        title: Text(widget.displayType),
         centerTitle: true,
+        elevation: 0,
+        backgroundColor: Colors.transparent,
         actions: [
-          // show contact picker icon only when Contact type is selected
-          if (selectedType == 'Contact')
+          if (_controller.isCreated)
             IconButton(
-              tooltip: l10n.pickContact,
-              icon: Icon(
-                Icons.contact_page_outlined,
-                color: colorScheme.onBackground,
-              ),
-              onPressed: _pickContactFromDevice,
+              icon: const Icon(Icons.edit_rounded, color: SecureScanTheme.accentBlue),
+              onPressed: () => _controller.setIsCreated(false),
+              tooltip: "Edit",
             ),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-        child: Column(
+      body: ListenableBuilder(
+        listenable: _controller,
+        builder: (context, _) {
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: _controller.isCreated
+                  ? _buildQRResult(textTheme, colorScheme, l10n)
+                  : Column(
+                      key: const ValueKey('form'),
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFormFields(textTheme, colorScheme, l10n),
+                        const SizedBox(height: 32),
+                        _buildCreateButton(l10n),
+                        const SizedBox(height: 24),
+                        const BannerAdWidget(),
+                      ],
+                    ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildFormFields(TextTheme textTheme, ColorScheme colorScheme, AppLocalizations l10n) {
+    switch (widget.selectedType) {
+      case QrType.url:
+        return Column(
           children: [
-            if (!isCreated)
-              _buildInputForm(textTheme, colorScheme)
-            else
-              _buildQRResult(textTheme, colorScheme),
-            // add bottom padding so content isn't hidden by banner
-            SizedBox(height: adHeight + 12),
+            _buildTextFieldWithError(
+              label: l10n.urlNameWithAst,
+              controller: _controller.urlNameController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.urlNameError,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            _buildTextFieldWithError(
+              label: l10n.urlLinkWithAst,
+              controller: _controller.urlLinkController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.urlLinkError,
+              keyboard: TextInputType.url,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.wifi:
+        return Column(
+          children: [
+            _buildTextFieldWithError(
+              label: l10n.wifiNameWithAst,
+              controller: _controller.wifiNameController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.wifiNameError,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            const SizedBox(height: 12),
+            DropdownButtonFormField<String>(
+              value: _controller.encryptionValue,
+              decoration: _inputDecoration(l10n.encryptionTypeWithAst, colorScheme, textTheme),
+              items: ["WPA/WPA2", "WEP", "None"].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+              onChanged: (v) => _controller.setEncryption(v),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _controller.wifiPasswordController,
+              obscureText: !_controller.wifiPasswordVisible,
+              decoration: _inputDecoration(l10n.password, colorScheme, textTheme).copyWith(
+                suffixIcon: IconButton(
+                  icon: Icon(_controller.wifiPasswordVisible ? Icons.visibility : Icons.visibility_off),
+                  onPressed: _controller.toggleWifiPasswordVisibility,
+                ),
+              ),
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            if (_controller.wifiPasswordError != null)
+              _errorText(_controller.wifiPasswordError!),
+          ],
+        );
+      case QrType.contact:
+        return Column(
+          children: [
+            ElevatedButton.icon(
+              onPressed: _pickContactFromDevice,
+              icon: const Icon(Icons.contacts_rounded, size: 20),
+              label: const Text("Import from Contacts"),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 54),
+                backgroundColor: colorScheme.surface,
+                foregroundColor: SecureScanTheme.accentBlue,
+                elevation: 0,
+                side: BorderSide(color: SecureScanTheme.accentBlue.withOpacity(0.5)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+            const SizedBox(height: 24),
+            _buildTextFieldWithError(
+              label: l10n.nameWithAst,
+              controller: _controller.nameController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.nameError,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            _buildTextFieldWithError(
+              label: l10n.phoneNumberWithAst,
+              controller: _controller.phoneController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.phoneError,
+              keyboard: TextInputType.phone,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.phone:
+        return Column(
+          children: [
+            _buildTextFieldWithError(
+              label: l10n.phoneNumberWithAst,
+              controller: _controller.phoneController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.phoneError,
+              keyboard: TextInputType.phone,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.email:
+        return Column(
+          children: [
+            _buildTextFieldWithError(
+              label: l10n.emailWithAst,
+              controller: _controller.emailController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.emailError,
+              keyboard: TextInputType.emailAddress,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.text:
+        return Column(
+          children: [
+            TextField(
+              controller: _controller.textController,
+              maxLines: 3,
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              decoration: _inputDecoration(l10n.content, colorScheme, textTheme).copyWith(
+                errorText: _controller.textError,
+                errorStyle: const TextStyle(fontWeight: FontWeight.w500),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.content_paste_rounded, color: SecureScanTheme.accentBlue),
+                  onPressed: () async {
+                    final data = await Clipboard.getData(Clipboard.kTextPlain);
+                    if (data?.text != null) {
+                      _controller.textController.text = data!.text!;
+                      if (mounted) _controller.validate(AppLocalizations.of(context)!);
+                    }
+                  },
+                ),
+              ),
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.calendar:
+        return Column(
+          children: [
+             _buildTextFieldWithError(
+              label: "${l10n.calendarEvent} *",
+              controller: _controller.eventTitleController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.eventTitleError,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            _buildTextFieldWithError(
+              label: l10n.location,
+              controller: _controller.eventLocationController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            _buildTextFieldWithError(
+              label: l10n.content,
+              controller: _controller.eventDescController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              maxLines: 3,
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      case QrType.location:
+        return Column(
+          children: [
+            _buildTextFieldWithError(
+              label: "Latitude *",
+              controller: _controller.latController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.latError,
+              keyboard: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+            _buildTextFieldWithError(
+              label: "Longitude *",
+              controller: _controller.lngController,
+              textTheme: textTheme,
+              colorScheme: colorScheme,
+              error: _controller.lngError,
+              keyboard: const TextInputType.numberWithOptions(decimal: true),
+              onChanged: (_) => _controller.validate(l10n),
+            ),
+          ],
+        );
+      default:
+        return const SizedBox();
+    }
+  }
+
+  InputDecoration _inputDecoration(String label, ColorScheme colorScheme, TextTheme textTheme) {
+    return InputDecoration(
+      labelText: label,
+      labelStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.7), fontSize: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: BorderSide(color: colorScheme.outline.withOpacity(0.2)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(16),
+        borderSide: const BorderSide(color: SecureScanTheme.accentBlue, width: 1.5),
+      ),
+      filled: true,
+      fillColor: colorScheme.surface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    );
+  }
+
+  Widget _errorText(String error) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8.0, left: 16),
+      child: Text(error, style: const TextStyle(color: Colors.redAccent, fontSize: 12, fontWeight: FontWeight.w500)),
+    );
+  }
+
+  Widget _buildCreateButton(AppLocalizations l10n) {
+    return Center(
+      child: Container(
+        width: double.infinity,
+        height: 56,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: [
+            BoxShadow(
+              color: SecureScanTheme.accentBlue.withOpacity(0.3),
+              blurRadius: 15,
+              offset: const Offset(0, 8),
+            ),
           ],
         ),
-      ),
-      bottomNavigationBar: adHeight > 0 && _bannerAd != null
-          ? SizedBox(
-              width: double.infinity,
-              height: adHeight,
-              child: Center(
-                child: SizedBox(
-                  width: _bannerAd!.size.width.toDouble(),
-                  height: _bannerAd!.size.height.toDouble(),
-                  child: AdWidget(ad: _bannerAd!),
-                ),
-              ),
-            )
-          : const SizedBox.shrink(),
-    );
-  }
-
-  // ---------------- UI helper widgets (unchanged logic, theme aware) ----------------
-
-  Widget _buildInputForm(TextTheme textTheme, ColorScheme colorScheme) {
-    final l10n = AppLocalizations.of(context)!;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          "QR Type",
-          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 8),
-        Padding(
-          padding: const EdgeInsets.only(bottom: 18),
+        child: ElevatedButton(
+          onPressed: _handleGenerate,
+          style: ElevatedButton.styleFrom(
+            backgroundColor: SecureScanTheme.accentBlue,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+            elevation: 0,
+          ),
           child: Text(
-            selectedType,
-            style: textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onBackground,
-            ),
+            l10n.createQr.toUpperCase(), 
+            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 1.0),
           ),
         ),
-
-        const SizedBox(height: 24),
-        if (selectedType == "Contact") ...[
-          _buildTextFieldWithError(
-            label: "Name *",
-            controller: nameController,
-            textTheme: textTheme,
-            colorScheme: colorScheme,
-            error: _nameError,
-            keyboard: TextInputType.name,
-          ),
-          IntlPhoneField(
-            decoration: InputDecoration(
-              labelText: "Phone Number *",
-              errorText: _phoneError,
-              border: const OutlineInputBorder(),
-              suffixIcon: _phoneError != null
-                  ? const Icon(Icons.error, color: Colors.red)
-                  : null,
-            ),
-            initialCountryCode: 'IN',
-            keyboardType: TextInputType.phone,
-            style: TextStyle(color: colorScheme.onBackground),
-            dropdownTextStyle: TextStyle(color: colorScheme.onBackground),
-
-            onChanged: (phone) {
-              _completePhoneNumber = phone.completeNumber;
-              phoneController.text = phone.completeNumber;
-
-              // basic validity check
-              _isPhoneValid = phone.number.isNotEmpty;
-              _onContactFieldChanged();
-            },
-
-            onCountryChanged: (country) {
-              debugPrint('Country changed to: ${country.name}');
-            },
-
-            validator: (phone) {
-              if (phone == null || phone.number.isEmpty) {
-                return AppLocalizations.of(context)!.phoneRequired;
-              }
-              return null; // intl_phone_field validates length internally
-            },
-          ),
-
-          _buildTextFieldWithError(
-            label: l10n.emailWithAst,
-            controller: emailController,
-            textTheme: textTheme,
-            colorScheme: colorScheme,
-            error: _emailError,
-            keyboard: TextInputType.emailAddress,
-            showTrailingErrorIcon: true,
-            onChanged: (_) => _onContactFieldChanged(),
-            textStyleColor: colorScheme.onSurface,
-          ),
-          // optional fields
-          _buildTextField(l10n.company, companyController, textTheme, colorScheme),
-          _buildTextField(
-            l10n.designation,
-            designationController,
-            textTheme,
-            colorScheme,
-          ),
-          _buildTextField(
-            l10n.address,
-            addressController,
-            textTheme,
-            colorScheme,
-            maxLines: 3,
-          ),
-        ] else if (selectedType == "Email") ...[
-          _buildTextField(
-            l10n.emailWithAst,
-            emailController,
-            textTheme,
-            colorScheme,
-            keyboard: TextInputType.emailAddress,
-          ),
-        ] else if (selectedType == "Text" ||
-            selectedType == "Content from clipboard") ...[
-          _buildTextField(
-            l10n.enterText,
-            designationController,
-            textTheme,
-            colorScheme,
-          ),
-        ] else if (selectedType == "Phone") ...[
-          IntlPhoneField(
-            decoration: InputDecoration(
-              labelText: l10n.phoneNumberWithAst,
-              errorText: _phoneError,
-              border: const OutlineInputBorder(),
-              suffixIcon: _phoneError != null
-                  ? const Icon(Icons.error, color: Colors.red)
-                  : null,
-            ),
-            initialCountryCode: 'IN',
-            keyboardType: TextInputType.phone,
-            style: TextStyle(color: colorScheme.onBackground),
-            dropdownTextStyle: TextStyle(color: colorScheme.onBackground),
-
-            onChanged: (phone) {
-              _completePhoneNumber = phone.completeNumber;
-              phoneController.text = phone.completeNumber;
-
-              // basic validity check
-              _isPhoneValid = phone.number.isNotEmpty;
-              _onContactFieldChanged();
-            },
-
-            onCountryChanged: (country) {
-              debugPrint('Country changed to: ${country.name}');
-            },
-
-            validator: (phone) {
-              if (phone == null || phone.number.isEmpty) {
-                return l10n.phoneRequired;
-              }
-              return null; // intl_phone_field validates length internally
-            },
-          ),
-        ] else if (selectedType == "URL") ...[
-          _buildTextFieldWithError(
-            label: l10n.urlNameWithAst,
-            controller: urlNameController,
-            textTheme: textTheme,
-            colorScheme: colorScheme,
-            error: _urlNameError,
-            keyboard: TextInputType.text,
-            onChanged: (_) => _onUrlFieldChanged(),
-            textStyleColor: colorScheme.onSurface,
-          ),
-          _buildTextFieldWithError(
-            label: l10n.urlLinkWithAst,
-            controller: urlLinkController,
-            textTheme: textTheme,
-            colorScheme: colorScheme,
-            error: _urlLinkError,
-            keyboard: TextInputType.url,
-            hint: "https://example.com",
-            onChanged: (_) => _onUrlFieldChanged(),
-            textStyleColor: colorScheme.onSurface,
-          ),
-        ] else ...[
-          _buildTextFieldWithError(
-            label: l10n.wifiNameWithAst,
-            controller: wifiNameController,
-            textTheme: textTheme,
-            colorScheme: colorScheme,
-            error: _wifiNameError,
-            onChanged: (_) => _onWifiFieldChanged(),
-            textStyleColor: colorScheme.onSurface,
-          ),
-          const SizedBox(height: 10),
-          // Encryption dropdown
-          Text(l10n.encryptionTypeWithAst, style: textTheme.labelMedium),
-          const SizedBox(height: 6),
-          DropdownButtonFormField<String>(
-            value: encryptionValue,
-            dropdownColor: colorScheme.surface,
-            decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 8,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              filled: true,
-              fillColor: colorScheme.surface,
-            ),
-            items: ["WPA/WPA2", "WEP", "None"].map((e) {
-              return DropdownMenuItem(
-                value: e,
-                child: Text(e, style: TextStyle(color: colorScheme.onSurface)),
-              );
-            }).toList(),
-            onChanged: (v) => setState(() {
-              encryptionValue = v ?? 'WPA/WPA2';
-              _onWifiFieldChanged();
-            }),
-          ),
-          const SizedBox(height: 12),
-          // Password with show/hide
-          Text(l10n.password, style: textTheme.labelMedium),
-          const SizedBox(height: 6),
-          TextField(
-            controller: wifiPasswordController,
-            keyboardType: TextInputType.visiblePassword,
-            obscureText: !_wifiPasswordVisible,
-            style: TextStyle(color: colorScheme.onBackground),
-            decoration: InputDecoration(
-              hintText: encryptionValue.toLowerCase() == 'none'
-                  ? l10n.noPasswordRequired
-                  : null,
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _wifiPasswordVisible
-                      ? Icons.visibility
-                      : Icons.visibility_off,
-                  color: colorScheme.onSurface,
-                ),
-                onPressed: () => setState(
-                  () => _wifiPasswordVisible = !_wifiPasswordVisible,
-                ),
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: colorScheme.outline),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              filled: true,
-              fillColor: colorScheme.surface,
-            ),
-            onChanged: (_) => _onWifiFieldChanged(),
-          ),
-          if (_wifiPasswordError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                _wifiPasswordError!,
-                style: TextStyle(color: Colors.redAccent),
-              ),
-            ),
-        ],
-        const SizedBox(height: 40),
-        Center(
-          child: ElevatedButton(
-            onPressed: _canCreate ? _generateQRCode : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: SecureScanTheme.accentBlue,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(30),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 80, vertical: 14),
-            ),
-            child: Text(
-              "Create",
-              style: textTheme.bodyLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 
-  Widget _buildQRResult(TextTheme textTheme, ColorScheme colorScheme) {
+  Widget _buildQRResult(TextTheme textTheme, ColorScheme colorScheme, AppLocalizations l10n) {
     return Column(
+      key: const ValueKey('result'),
       children: [
+        const SizedBox(height: 20),
         RepaintBoundary(
           key: _qrKey,
           child: Container(
-            margin: const EdgeInsets.symmetric(vertical: 16),
-            padding: const EdgeInsets.all(8),
+            padding: const EdgeInsets.all(28),
             decoration: BoxDecoration(
-              border: Border.all(color: SecureScanTheme.accentBlue, width: 2),
-              borderRadius: BorderRadius.circular(10),
-              color: colorScheme.surface,
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(32),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.12),
+                  blurRadius: 30,
+                  offset: const Offset(0, 15),
+                )
+              ],
             ),
-            child: QrImageView(
-              data: qrData,
-              version: QrVersions.auto,
-              size: 180,
-              // Keep QR background white to ensure readability even in dark mode
-              backgroundColor: Colors.white,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                QrImageView(
+                  data: _controller.qrData,
+                  version: QrVersions.auto,
+                  size: 250,
+                  gapless: false,
+                  errorCorrectionLevel: QrErrorCorrectLevel.Q,
+                  eyeStyle: const QrEyeStyle(
+                    eyeShape: QrEyeShape.square,
+                    color: Colors.black,
+                  ),
+                  dataModuleStyle: const QrDataModuleStyle(
+                    dataModuleShape: QrDataModuleShape.square,
+                    color: Colors.black,
+                  ),
+                ),
+                // if (widget.selectedType == QrType.text) ...[
+                //   const SizedBox(height: 12),
+                //   Text(
+                //     _controller.qrData.length > 50 ? '${_controller.qrData.substring(0, 50)}...' : _controller.qrData,
+                //     style: const TextStyle(color: Colors.black54, fontSize: 12, fontWeight: FontWeight.w500),
+                //     textAlign: TextAlign.center,
+                //   ),
+                // ]
+              ],
             ),
           ),
         ),
+        const SizedBox(height: 36),
+        Text(
+          l10n.qrCodeReady,
+          style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900, color: colorScheme.onBackground),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          l10n.qrGeneratedSaved,
+          textAlign: TextAlign.center,
+          style: textTheme.bodyMedium?.copyWith(color: colorScheme.onBackground.withOpacity(0.6)),
+        ),
+        const SizedBox(height: 48),
         Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
           children: [
-            Icon(Icons.verified, color: SecureScanTheme.accentBlue, size: 28),
-            const SizedBox(width: 6),
-            SizedBox(
-              width: MediaQuery.of(context).size.width * 0.7,
-              child: Text(
-                "$selectedType QR Code has been created successfully!",
-                style: textTheme.titleMedium?.copyWith(
-                  color: SecureScanTheme.accentBlue,
-                  fontWeight: FontWeight.w600,
-                ),
+            Expanded(child: _buildActionButton(l10n.share, Icons.share_rounded, _shareQR, colorScheme)),
+            const SizedBox(width: 16),
+            Expanded(child: _buildActionButton(l10n.download, Icons.download_rounded, _downloadQR, colorScheme)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(child: _buildActionButton(l10n.edit, Icons.edit_rounded, () => _controller.setIsCreated(false), colorScheme)),
+            const SizedBox(width: 16),
+            Expanded(
+              child: _buildActionButton(
+                l10n.backToMain, 
+                Icons.home_rounded, 
+                () => Navigator.pop(context), 
+                colorScheme,
+                isFullWidth: true,
               ),
             ),
           ],
         ),
-        const SizedBox(height: 40),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(14),
-          margin: const EdgeInsets.symmetric(vertical: 10),
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.outline),
-          ),
-          child: _buildDetailsCard(textTheme, colorScheme),
-        ),
-        const SizedBox(height: 60),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _buildActionButton("Download", Icons.download, _downloadQR),
-            const SizedBox(width: 16),
-            _buildActionButton("Share", Icons.share_outlined, _shareQR),
-          ],
-        ),
+        const SizedBox(height: 10),
+        BannerAdWidget(),
       ],
     );
   }
 
-  Widget _buildDetailsCard(TextTheme textTheme, ColorScheme colorScheme) {
-    List<Map<String, dynamic>> fields = [];
-    if (selectedType == "Contact") {
-      fields = [
-        {"label": "Name", "value": nameController.text},
-        {"label": "Phone", "value": phoneController.text},
-        {"label": "Email", "value": emailController.text},
-      ];
-      // include optional fields if present
-      if (companyController.text.trim().isNotEmpty) {
-        fields.add({"label": "Company", "value": companyController.text});
+  Widget _buildActionButton(String label, IconData icon, VoidCallback onTap, ColorScheme colorScheme, {bool isFullWidth = false}) {
+    return Container(
+       decoration: BoxDecoration(
+          boxShadow: isFullWidth ? [
+             BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            )
+          ] : null,
+       ),
+       child: ElevatedButton.icon(
+        onPressed: onTap,
+        icon: Icon(icon, size: 20),
+        label: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: isFullWidth ? SecureScanTheme.accentBlue : colorScheme.surface,
+          foregroundColor: isFullWidth ? Colors.white : colorScheme.onSurface,
+          minimumSize: const Size(double.infinity, 54),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: isFullWidth ? BorderSide.none : BorderSide(color: colorScheme.outline.withOpacity(0.1)),
+          ),
+          elevation: 0,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _shareQR() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      // Small delay to ensure the widget is fully painted after animation
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
+
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData != null) {
+        final buffer = byteData.buffer.asUint8List();
+        final tempDir = await getTemporaryDirectory();
+        final file = await File('${tempDir.path}/qr_code_${DateTime.now().millisecondsSinceEpoch}.png').create();
+        await file.writeAsBytes(buffer);
+        await Share.shareXFiles(
+          [XFile(file.path)], 
+          text: l10n.sharePromoText('https://play.google.com/store/apps/details?id=com.securescan.securescan')
+        );
       }
-      if (designationController.text.trim().isNotEmpty) {
-        fields.add({
-          "label": "Designation",
-          "value": designationController.text,
-        });
-      }
-      if (addressController.text.trim().isNotEmpty) {
-        fields.add({"label": "Address", "value": addressController.text});
-      }
-    } else if (selectedType == "URL") {
-      fields = [
-        {"label": "Name", "value": urlNameController.text},
-        {"label": "Link", "value": urlLinkController.text},
-      ];
-    } else if (selectedType == "Phone") {
-      fields = [
-        {"label": "Phone", "value": phoneController.text},
-      ];
-    } else if (selectedType == "Email") {
-      fields = [
-        {"label": "Email", "value": emailController.text},
-      ];
-    } else if (selectedType == "Text" ||
-        selectedType == "Content from clipboard") {
-      fields = [
-        {"label": "Type Name", "value": designationController.text},
-      ];
-    } else {
-      fields = [
-        {"label": "WiFi", "value": wifiNameController.text},
-        {"label": "Encryption", "value": encryptionValue},
-      ];
-      if (encryptionValue.toLowerCase() != 'none') {
-        fields.add({"label": "Password", "value": wifiPasswordController.text});
+    } catch (e) {
+      debugPrint("Error sharing QR: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to share QR: $e")),
+        );
       }
     }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: fields
-          .map(
-            (f) => Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: Text(
-                "${f['label']}: ${f['value']}",
-                style: textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurface,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-          )
-          .toList(),
-    );
   }
 
-  Widget _buildActionButton(
-    String text,
-    IconData icon,
-    VoidCallback onPressed,
-  ) {
-    return ElevatedButton.icon(
-      onPressed: onPressed,
-      icon: Icon(icon, color: Colors.white),
-      label: Text(
-        text,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 16,
-          fontWeight: FontWeight.w600,
-        ),
-      ),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: SecureScanTheme.accentBlue,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
-        padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 16),
-      ),
-    );
-  }
+  Future<void> _downloadQR() async {
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      setState(() => _controller.setIsCreated(true)); // Just to ensure UI state
+      
+      final boundary = _qrKey.currentContext?.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return;
 
-  Widget _buildTextField(
-    String label,
-    TextEditingController controller,
-    TextTheme textTheme,
-    ColorScheme colorScheme, {
-    TextInputType keyboard = TextInputType.text,
-    bool isPassword = false,
-    String? hint,
-    int maxLines = 1,
-    TextStyle? textStyle,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 25),
-      child: TextField(
-        controller: controller,
-        keyboardType: keyboard,
-        obscureText: isPassword,
-        maxLines: maxLines,
-        style:
-            textStyle ??
-            TextStyle(fontSize: 18, color: colorScheme.onSurface),
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          labelStyle: textTheme.labelMedium?.copyWith(
-            color: colorScheme.onSurface,
-            fontSize: 16,
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(
-              color: SecureScanTheme.accentBlue,
-              width: 1.5,
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData != null) {
+        final buffer = byteData.buffer.asUint8List();
+        await Gal.putImageBytes(buffer, album: 'SecureScanner');
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(l10n.qrSavedToGallery),
+              backgroundColor: Colors.green,
             ),
-          ),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: colorScheme.outline),
-          ),
-          contentPadding: const EdgeInsets.symmetric(
-            horizontal: 16,
-            vertical: 14,
-          ),
-          filled: true,
-          fillColor: colorScheme.surface,
-        ),
-      ),
-    );
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error downloading QR: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to save QR: $e")),
+        );
+      }
+    }
   }
 
   Widget _buildTextFieldWithError({
@@ -1339,83 +706,27 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
     required TextEditingController controller,
     required TextTheme textTheme,
     required ColorScheme colorScheme,
-    TextInputType keyboard = TextInputType.text,
-    bool isPassword = false,
-    String? hint,
-    int maxLines = 1,
     String? error,
-    List<TextInputFormatter>? inputFormatters,
-    bool showTrailingErrorIcon = false,
-    ValueChanged<String>? onChanged,
-    Color textStyleColor = Colors.black,
+    int maxLines = 1,
+    TextInputType keyboard = TextInputType.text,
+    void Function(String)? onChanged,
   }) {
-    final hasError = error != null && error.isNotEmpty;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: controller,
-            keyboardType: keyboard,
-            obscureText: isPassword,
-            maxLines: maxLines,
-            inputFormatters: inputFormatters,
-            style: TextStyle(
-              fontSize: 18,
-              color: colorStyleOrDefault(
-                textStyleColor,
-                Theme.of(context).colorScheme.onSurface,
-              ),
-            ),
-            decoration: InputDecoration(
-              labelText: label,
-              hintText: hint,
-              labelStyle: textTheme.labelMedium?.copyWith(
-                color: colorScheme.onSurface,
-                fontSize: 16,
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(
-                  color: SecureScanTheme.accentBlue,
-                  width: 1.5,
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: colorScheme.outline),
-              ),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 14,
-              ),
-              suffixIcon: showTrailingErrorIcon && hasError
-                  ? const Icon(Icons.error_outline, color: Colors.redAccent)
-                  : null,
-              filled: true,
-              fillColor: colorScheme.surface,
-            ),
-            onChanged: onChanged,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          keyboardType: keyboard,
+          maxLines: maxLines,
+          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          decoration: _inputDecoration(label, colorScheme, textTheme).copyWith(
+            errorText: error,
+            errorStyle: const TextStyle(fontWeight: FontWeight.w500),
           ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6, left: 6),
-              child: Text(
-                error,
-                style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-              ),
-            ),
-          const SizedBox(height: 16),
-        ],
-      ),
+          onChanged: onChanged,
+        ),
+        const SizedBox(height: 16),
+      ],
     );
-  }
-
-  // small helper to allow optional color param passed as Colors.black in many call sites
-  Color colorStyleOrDefault(Color passed, Color fallback) {
-    // if passed is Colors.black (default) and fallback is light-on-dark, use fallback
-    if (passed == Colors.black) return fallback;
-    return passed;
   }
 }

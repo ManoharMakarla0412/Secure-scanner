@@ -1,9 +1,10 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
+import 'package:securescan/core/config/secrets.dart';
 
 class ProductService {
-  static const String BARCODE_LOOKUP_API_KEY = ''; 
+  static const String BARCODE_LOOKUP_API_KEY = Secrets.barcodeLookupApiKey;
   static const Duration _productLookupTimeout = Duration(seconds: 3);
 
   /// Try multiple product lookup services (in order) to maximize chance of finding

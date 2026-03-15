@@ -10,16 +10,20 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import 'package:securescan/core/enums/qr_type.dart';
+import 'package:securescan/core/models/history_item.dart';
+import 'package:securescan/core/repositories/history_repository.dart';
+import 'package:securescan/core/utils/date_helper.dart';
+
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:intl/intl.dart';
 import 'package:securescan/services/language_service.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 
 import 'package:securescan/l10n/app_localizations.dart';
 import '../../../themes.dart';
 
 import 'created_qr_modal_screen.dart';
-import 'package:securescan/features/scan/screens/scan_screen_qr.dart'; // QrResultData
-import 'package:securescan/features/scan/screens/qr_result_screen.dart'; // QrResultScreen
+import 'package:securescan/features/scan/screens/qr_result_screen.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -32,200 +36,55 @@ class _HistoryScreenState extends State<HistoryScreen> {
   bool isScanSelected = true;
   final GlobalKey _qrGlobalKey = GlobalKey();
 
-  List<String> _scanEncoded = [];
-  List<String> _createdEncoded = [];
+  List<HistoryItem> scannedItems = [];
+  List<HistoryItem> createdItems = [];
 
-  List<Map<String, String>> scannedItems = [];
-  List<Map<String, String>> createdItems = [];
-
-  // ---- AdMob banner fields ----
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-
-  // Google's test banner id for development
-  static const String _googleTestBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-
-  // Replace with your production ad unit id
-  static const String _productionBannerAdUnitId =
-      'ca-app-pub-2961863855425096/5968213716';
-
-  String get _adUnitId =>
-      kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
-
-  // optional retry attempts
-  int _loadAttempts = 0;
-  static const int _maxLoadAttempts = 3;
+  // Ad Unit IDs managed in AdManager
 
   @override
   void initState() {
     super.initState();
     _loadAllHistory();
-    _loadBannerAd();
   }
 
   Future<void> _loadAllHistory() async {
-    await Future.wait([_loadScanHistory(), _loadCreatedHistory()]);
-  }
-
-  Future<void> _loadScanHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('scan_history') ?? <String>[];
-    _scanEncoded = List<String>.from(list);
-
-    final parsed = <Map<String, String>>[];
-    for (final s in _scanEncoded) {
-      try {
-        final map = jsonDecode(s) as Map<String, dynamic>;
-        final kind = (map['kind'] ?? 'text').toString();
-        final raw = (map['raw'] ?? '').toString();
-        final data = map['data'] is Map
-            ? Map<String, dynamic>.from(map['data'])
-            : <String, dynamic>{};
-        final tsStr = (map['ts'] ?? '').toString();
-        final ts = DateTime.tryParse(tsStr) ?? DateTime.now();
-
-        parsed.add({
-          'type': _labelForKind(kind),
-          'value': _displayValueFor(kind, raw, data),
-          'time': _formatNice(ts),
-          'raw': raw,
-          'kind': kind,
-          'encoded': s,
-        });
-      } catch (_) {}
-    }
+    final results = await Future.wait([
+      HistoryRepository.instance.getScanHistory(),
+      HistoryRepository.instance.getCreatedHistory(),
+    ]);
 
     setState(() {
-      scannedItems = parsed.reversed.toList();
-    });
-  }
-
-  Future<void> _loadCreatedHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('created_history') ?? <String>[];
-    _createdEncoded = List<String>.from(list);
-
-    final parsed = <Map<String, String>>[];
-    final looksJson =
-        _createdEncoded.isNotEmpty &&
-        _createdEncoded.first.trim().startsWith('{');
-
-    if (looksJson) {
-      for (final s in _createdEncoded) {
-        try {
-          final map = jsonDecode(s) as Map<String, dynamic>;
-          final typeRaw = (map['type'] ?? 'Content').toString();
-          final type = _normalizeCreatedType(typeRaw);
-          final value = (map['value'] ?? '').toString();
-          final time = (map['time'] ?? '').toString();
-          parsed.add({
-            'type': type,
-            'value': value,
-            'time': time,
-            'display': _displayValueForCreated(typeRaw, value),
-            'raw': value,
-          });
-        } catch (_) {}
-      }
-    } else {
-      for (final raw in _createdEncoded) {
-        final s = raw.trim();
-        if (s.isEmpty) continue;
-        final parts = s.split(',');
-        if (parts.length >= 3) {
-          final typeRaw = parts.first.trim();
-          final time = parts.last.trim();
-          final value = parts.sublist(1, parts.length - 1).join(', ').trim();
-          final type = _normalizeCreatedType(typeRaw);
-          parsed.add({
-            'type': type,
-            'value': value,
-            'time': time,
-            'display': _displayValueForCreated(typeRaw, value),
-            'raw': value,
-          });
-        }
-      }
-    }
-
-    setState(() {
-      createdItems = parsed.reversed.toList();
+      scannedItems = results[0];
+      createdItems = results[1];
     });
   }
 
   // ---------- Helpers ----------
 
-  String _labelForKind(String kind) {
+  String _labelForType(QrType type) {
     final l10n = AppLocalizations.of(context)!;
-    switch (kind) {
-      case 'url':
+    switch (type) {
+      case QrType.url:
         return l10n.url;
-      case 'phone':
+      case QrType.phone:
         return l10n.phone;
-      case 'email':
+      case QrType.email:
         return l10n.email;
-      case 'wifi':
+      case QrType.wifi:
         return l10n.wifi;
-      case 'vcard':
+      case QrType.contact:
         return l10n.contact;
-      case 'calendar':
+      case QrType.calendar:
         return l10n.calendar;
-      case 'geo':
+      case QrType.location:
         return l10n.location;
-      case 'json':
+      case QrType.json:
         return l10n.json;
-      case 'text':
       default:
         return l10n.content;
     }
   }
 
-  String _normalizeCreatedType(String raw) {
-    final l10n = AppLocalizations.of(context)!;
-    final t = raw.trim().toLowerCase();
-    if (t == 'url') return l10n.url;
-    if (t == 'wifi' || t == 'wi-fi') return l10n.wifi;
-    if (t == 'contact' || t == 'vcard' || t == 'mecard') return l10n.contact;
-    if (t == 'phone') return l10n.phone;
-    if (t == 'email') return l10n.email;
-    if (t == 'calendar') return l10n.calendar;
-    if (t == 'location' || t == 'geo') return l10n.location;
-    if (t == 'text' || t == 'content' || t == 'content from clipboard')
-      return l10n.content;
-    return raw.isEmpty ? l10n.content : raw;
-  }
-
-  String _displayValueFor(String kind, String raw, Map<String, dynamic> data) {
-    switch (kind) {
-      case 'wifi':
-        return data['ssid']?.toString() ?? raw;
-      case 'geo':
-        final lat = data['lat'];
-        final lng = data['lng'];
-        if (lat != null && lng != null) return '$lat, $lng';
-        return raw;
-      default:
-        return raw;
-    }
-  }
-
-  String _displayValueForCreated(String type, String value) {
-    switch (type.toLowerCase()) {
-      case 'wifi':
-      case 'wi-fi':
-        return _parseWifiSsid(value) ?? value;
-      case 'contact':
-      case 'vcard':
-      case 'mecard':
-        final me = _parseMecard(value);
-        return me['name']?.isNotEmpty == true
-            ? me['name']!
-            : me['tel'] ?? value;
-      default:
-        return value;
-    }
-  }
 
   String? _parseWifiSsid(String wifiPayload) {
     if (!wifiPayload.startsWith('WIFI:')) return null;
@@ -256,113 +115,33 @@ class _HistoryScreenState extends State<HistoryScreen> {
     };
   }
 
-  IconData _getIcon(String type) {
+  IconData _getIcon(QrType type) {
     switch (type) {
-      case 'URL':
+      case QrType.url:
         return FontAwesomeIcons.globe;
-      case 'Email':
+      case QrType.email:
         return FontAwesomeIcons.envelope;
-      case 'Contact':
+      case QrType.contact:
         return FontAwesomeIcons.user;
-      case 'Phone':
+      case QrType.phone:
         return FontAwesomeIcons.phone;
-      case 'Wi-Fi':
+      case QrType.wifi:
         return FontAwesomeIcons.wifi;
-      case 'Calendar':
+      case QrType.calendar:
         return FontAwesomeIcons.calendarDays;
-      case 'Location':
+      case QrType.location:
         return FontAwesomeIcons.locationDot;
-      case 'JSON':
+      case QrType.json:
         return FontAwesomeIcons.code;
       default:
         return Icons.info_outline;
     }
   }
 
-  String _formatNice(DateTime dt) {
-    final locale = LanguageController.instance.currentLanguageCode;
-    // Format: "Day Month Year | HH:mm"
-    // Using DateFormat for better internationalization
-    return DateFormat.yMMMd(locale).add_jm().format(dt.toLocal());
-  }
-
-  Future<void> _deleteScanItemByEncoded(String encoded) async {
-    try {
-      final map = jsonDecode(encoded);
-      final path = map['imagePath']?.toString();
-      if (path != null) {
-        final file = File(path);
-        if (await file.exists()) {
-          await file.delete();
-        }
-      }
-    } catch (_) {}
-
-    final prefs = await SharedPreferences.getInstance();
-    _scanEncoded.remove(encoded);
-    await prefs.setStringList('scan_history', _scanEncoded);
-    await _loadScanHistory();
-  }
-
-  Future<void> _deleteCreatedItemByRaw(String raw) async {
-    final prefs = await SharedPreferences.getInstance();
-    final list = prefs.getStringList('created_history') ?? [];
-
-    // Each line is stored like: "Type, Value, Time"
-    // We must identify the line whose Value matches `raw`
-    final updatedList = list.where((entry) {
-      final parts = entry.split(',');
-      if (parts.length < 2) return true; // malformed, keep it
-      final value = parts[1].trim();
-      return value != raw.trim();
-    }).toList();
-
-    await prefs.setStringList('created_history', updatedList);
-
-    // Reload UI
-    await _loadCreatedHistory();
-  }
-
-  // ---- Banner ad loader ----
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
-      request: const AdRequest(),
-      size: AdSize.banner,
-      listener: BannerAdListener(
-        onAdLoaded: (ad) {
-          setState(() {
-            _isBannerAdReady = true;
-            _loadAttempts = 0;
-          });
-        },
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          _isBannerAdReady = false;
-          _loadAttempts += 1;
-          debugPrint(
-            '[History] Banner failed to load: $error (attempt $_loadAttempts)',
-          );
-          if (_loadAttempts <= _maxLoadAttempts) {
-            final delaySeconds = 1 << (_loadAttempts - 1); // 1,2,4
-            Future.delayed(Duration(seconds: delaySeconds), _loadBannerAd);
-          } else {
-            debugPrint(
-              '[History] Banner: giving up after $_loadAttempts attempts.',
-            );
-          }
-          setState(() {});
-        },
-      ),
-    );
-
-    _bannerAd!.load();
-  }
+  // Ad loading handled by BannerAdWidget
 
   @override
   void dispose() {
-    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -375,14 +154,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final l10n = AppLocalizations.of(context)!;
 
-    final List<Map<String, String>> historyItems = isScanSelected
+    final List<HistoryItem> historyItems = isScanSelected
         ? scannedItems
         : createdItems;
-
-    // Ad height 0 when not ready (so nothing is shown)
-    final adHeight = _isBannerAdReady && _bannerAd != null
-        ? _bannerAd!.size.height.toDouble()
-        : 0.0;
 
     return Scaffold(
       backgroundColor: colorScheme.background,
@@ -478,7 +252,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           child: Text(
                             l10n.noHistoryFound,
                             style: textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
+                              color: colorScheme.onSurface.withOpacity(0.6),
                             ),
                           ),
                         ),
@@ -489,9 +263,6 @@ class _HistoryScreenState extends State<HistoryScreen> {
                       itemCount: historyItems.length,
                       itemBuilder: (context, index) {
                         final item = historyItems[index];
-                        final showValue = isScanSelected
-                            ? (item['value'] ?? '')
-                            : (item['display'] ?? item['value'] ?? '');
 
                         // Always show 3-dots menu (Delete) for both Scan and Created tabs.
                         final trailingWidget = PopupMenuButton<String>(
@@ -503,17 +274,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           onSelected: (value) async {
                             if (value == 'Delete') {
                               if (isScanSelected) {
-                                final encoded = item['encoded'];
-                                if (encoded != null) {
-                                  await _deleteScanItemByEncoded(encoded);
-                                }
+                                await HistoryRepository.instance.deleteScanItem(item.id);
                               } else {
-                                // For created items we attempt to delete by the raw/value string stored.
-                                final raw = item['raw'] ?? item['value'];
-                                if (raw != null) {
-                                  await _deleteCreatedItemByRaw(raw);
-                                }
+                                await HistoryRepository.instance.deleteCreatedItem(item.id);
                               }
+                              _loadAllHistory();
                             }
                           },
                           itemBuilder: (context) => [
@@ -527,7 +292,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           ],
                           icon: Icon(
                             Icons.more_vert,
-                            color: colorScheme.onSurfaceVariant,
+                            color: colorScheme.onSurface.withOpacity(0.6),
                           ),
                         );
 
@@ -546,41 +311,41 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             child: Row(
                               children: [
                                 // Left
-                                Container(
-                                  width: 68,
-                                  alignment: Alignment.center,
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 18,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? Colors.white10
-                                        : const Color(0xFFF4F4F4),
-                                    borderRadius: const BorderRadius.only(
-                                      topLeft: Radius.circular(12),
-                                      bottomLeft: Radius.circular(12),
+                                  Container(
+                                    width: 80,
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 18,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: isDark
+                                          ? Colors.white10
+                                          : const Color(0xFFF4F4F4),
+                                      borderRadius: const BorderRadius.only(
+                                        topLeft: Radius.circular(12),
+                                        bottomLeft: Radius.circular(12),
+                                      ),
+                                    ),
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Icon(
+                                          _getIcon(item.type),
+                                          color: SecureScanTheme.accentBlue,
+                                          size: 22,
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text(
+                                          _labelForType(item.type),
+                                          textAlign: TextAlign.center,
+                                          style: textTheme.labelSmall?.copyWith(
+                                            color: SecureScanTheme.accentBlue,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        _getIcon(item['type']!),
-                                        color: SecureScanTheme.accentBlue,
-                                        size: 22,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        item['type']!,
-                                        textAlign: TextAlign.center,
-                                        style: textTheme.labelSmall?.copyWith(
-                                          color: SecureScanTheme.accentBlue,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
 
                                 // Right
                                 Expanded(
@@ -591,7 +356,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          showValue,
+                                          item.displayValue ?? item.value,
                                           overflow: TextOverflow.ellipsis,
                                           style: textTheme.bodyLarge?.copyWith(
                                             fontWeight: FontWeight.w600,
@@ -599,9 +364,9 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         ),
                                         const SizedBox(height: 6),
                                         Text(
-                                          item['time'] ?? '',
+                                          DateHelper.formatHistoryDate(item.timestamp),
                                           style: textTheme.bodySmall?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
+                                            color: colorScheme.onSurface.withOpacity(0.6),
                                           ),
                                         ),
                                       ],
@@ -622,87 +387,29 @@ class _HistoryScreenState extends State<HistoryScreen> {
             ),
           ),
 
-          // ---------- Banner Ad spot: shows nothing until ad is ready ----------
-          SizedBox(
-            width: double.infinity,
-            height: adHeight,
-            child: _isBannerAdReady && _bannerAd != null
-                ? Center(
-                    child: SizedBox(
-                      width: _bannerAd!.size.width.toDouble(),
-                      height: _bannerAd!.size.height.toDouble(),
-                      child: AdWidget(ad: _bannerAd!),
-                    ),
-                  )
-                : const SizedBox.shrink(),
-          ),
+          const BannerAdWidget(),
         ],
       ),
     );
   }
 
-  void _onHistoryItemTap(Map<String, String> item) async {
-    if (isScanSelected) {
-      // Navigate to QrResultScreen with the stored scan data
-      final raw = item['raw'] ?? item['value'] ?? '';
-      final kind = item['kind'] ?? 'text';
-      final tsStr = item['time'] ?? '';
-
-      // Parse the encoded JSON to extract additional data and image if available
-      Map<String, dynamic>? data;
-      String? format;
-      Uint8List? imageBytes;
-      DateTime timestamp = DateTime.now();
-      if (item['encoded'] != null) {
-        try {
-          final map = jsonDecode(item['encoded']!) as Map<String, dynamic>;
-          if (map['data'] is Map) {
-            data = Map<String, dynamic>.from(map['data']);
-          }
-          format = map['symbology']?.toString();
-          final ts = map['ts']?.toString();
-          if (ts != null) {
-            timestamp = DateTime.tryParse(ts) ?? DateTime.now();
-          }
-          final imageBase64 = map['image']?.toString();
-          if (imageBase64 != null) {
-            imageBytes = base64Decode(imageBase64);
-          }
-          final imagePath = map['imagePath']?.toString();
-          if (imagePath != null) {
-            final file = File(imagePath);
-            if (await file.exists()) {
-              imageBytes = await file.readAsBytes();
-            }
-          }
-        } catch (_) {}
-      }
-
-      final result = QrResultData(
-        raw: raw,
-        kind: kind,
-        format: format,
-        data: data,
-        imageBytes: imageBytes,
-        timestamp: timestamp,
-      );
-
+  void _onHistoryItemTap(HistoryItem item) async {
+    if (!item.isCreated) {
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => QrResultScreen(result: result),
+          builder: (_) => QrResultScreen(result: item),
         ),
       );
     } else {
-      // Created tab -> open full screen created QR modal screen
-      final type = item['type'] ?? 'Content';
-      final value = item['raw'] ?? item['value'] ?? '';
-      final time = item['time'] ?? '';
       Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              CreatedQrModalScreen(type: type, value: value, time: time),
+          builder: (_) => CreatedQrModalScreen(
+            type: item.type.name,
+            value: item.value,
+            time: DateHelper.formatCreatedDate(item.timestamp),
+          ),
           fullscreenDialog: true,
         ),
       );
@@ -711,7 +418,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // ----------- Dialog -----------
 
-  void _showQrPreviewDialog(String type, String value, String time) {
+  void _showQrPreviewDialog(QrType type, String value, String time) {
     final l10n = AppLocalizations.of(context)!;
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
@@ -729,7 +436,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               Icon(_getIcon(type), color: SecureScanTheme.accentBlue, size: 22),
               const SizedBox(width: 10),
               Text(
-                type,
+                _labelForType(type),
                 style: textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.w600,
                   color: colorScheme.onBackground,
@@ -772,6 +479,8 @@ class _HistoryScreenState extends State<HistoryScreen> {
                             data: value,
                             version: QrVersions.auto,
                             backgroundColor: Colors.white,
+                            gapless: false,
+                            errorCorrectionLevel: QrErrorCorrectLevel.Q,
                           ),
                         ),
                         const SizedBox(height: 24),
@@ -796,7 +505,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
               child: Text(
                 l10n.close,
                 style: textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
+                  color: colorScheme.onSurface.withOpacity(0.6),
                 ),
               ),
             ),
