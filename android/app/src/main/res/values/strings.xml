@@ -8,12 +8,6 @@
         (com.google.ads.mediation:facebook) declares this meta-data in its
         AndroidManifest, which is merged into the app manifest at build time.
     -->
-    <string name="facebook_app_id">0</string>
-
-    <!--
-        Facebook Client Token — also required by recent Facebook SDK versions.
-        Replace with your real client token from:
-        Facebook Developer Console → Your App → Settings → Advanced → Client Token
-    -->
-    <string name="facebook_client_token">YOUR_FACEBOOK_CLIENT_TOKEN</string>
+    <string name="facebook_app_id"></string>
+    <string name="facebook_client_token"></string>
 </resources>
