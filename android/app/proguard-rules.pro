@@ -12,6 +12,14 @@
 # Keep Facebook Mediation Adapter
 -keep class com.google.ads.mediation.facebook.** { *; }
 
+# Google Mobile Ads
+-keep public class com.google.android.gms.ads.** {
+   public *;
+}
+-keep public class com.google.ads.** {
+   public *;
+}
+
 # Keep common attributes
 -keepattributes *Annotation*
 -keepattributes Signature

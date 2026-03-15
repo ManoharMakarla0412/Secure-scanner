@@ -41,9 +41,29 @@ public final class GeneratedPluginRegistrant {
       Log.e(TAG, "Error registering plugin flutter_native_contact_picker, com.jayesh.flutter_native_contact_picker.FlutterNativeContactPickerPlugin", e);
     }
     try {
+      flutterEngine.getPlugins().add(new flutter.overlay.window.flutter_overlay_window.FlutterOverlayWindowPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin flutter_overlay_window, flutter.overlay.window.flutter_overlay_window.FlutterOverlayWindowPlugin", e);
+    }
+    try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin flutter_plugin_android_lifecycle, io.flutter.plugins.flutter_plugin_android_lifecycle.FlutterAndroidLifecyclePlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new studio.midoridesign.gal.GalPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin gal, studio.midoridesign.gal.GalPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new com.google_mlkit_barcode_scanning.GoogleMlKitBarcodeScanningPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin google_mlkit_barcode_scanning, com.google_mlkit_barcode_scanning.GoogleMlKitBarcodeScanningPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new com.google_mlkit_commons.GoogleMlKitCommonsPlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin google_mlkit_commons, com.google_mlkit_commons.GoogleMlKitCommonsPlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new io.flutter.plugins.googlemobileads.GoogleMobileAdsPlugin());
@@ -79,6 +99,11 @@ public final class GeneratedPluginRegistrant {
       flutterEngine.getPlugins().add(new com.baseflow.permissionhandler.PermissionHandlerPlugin());
     } catch (Exception e) {
       Log.e(TAG, "Error registering plugin permission_handler_android, com.baseflow.permissionhandler.PermissionHandlerPlugin", e);
+    }
+    try {
+      flutterEngine.getPlugins().add(new it.mainella.phone_state.PhoneStatePlugin());
+    } catch (Exception e) {
+      Log.e(TAG, "Error registering plugin phone_state, it.mainella.phone_state.PhoneStatePlugin", e);
     }
     try {
       flutterEngine.getPlugins().add(new dev.fluttercommunity.plus.share.SharePlusPlugin());

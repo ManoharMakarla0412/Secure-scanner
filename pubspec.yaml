@@ -1,5 +1,5 @@
 name: securescan
-description: "A new Flutter project."
+description: "A high-performance QR and Barcode scanner and generator with secure features, multi-language support, and modern design."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -16,7 +16,7 @@ publish_to: 'none' # Remove this line if you wish to publish to pub.dev
 # https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html
 # In Windows, build-name is used as the major, minor, and patch parts
 # of the product and file versions while build-number is used as the build suffix.
-version: 1.1.0+0
+version: 1.0.0+14
 
 environment:
   sdk: ^3.9.2
@@ -53,9 +53,13 @@ dependencies:
   firebase_core: ^4.4.0
   firebase_analytics: ^12.1.1
   firebase_crashlytics: ^5.0.7
+  gal: ^2.3.2
   flutter_localizations:
     sdk: flutter
   intl: any
+  flutter_overlay_window: ^0.5.0
+  phone_state: ^3.0.1
+  google_mlkit_barcode_scanning: ^0.14.2
 
 dev_dependencies:
   flutter_test:
