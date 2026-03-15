@@ -442,4 +442,43 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get statusDenied => 'Negado';
+
+  @override
+  String get downloadSuccess => 'Download Efetuado com Sucesso';
+
+  @override
+  String get legalInfo => 'Informação Legal';
+
+  @override
+  String get download => 'Download';
+
+  @override
+  String get edit => 'Editar';
+
+  @override
+  String get backToMain => 'Voltar ao Início';
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String get scanDetail => 'Detalhes da Digitalização';
+
+  @override
+  String get scanResultTitle => 'Resultado da Digitalização';
+
+  @override
+  String get qrCodeReady => 'Código QR Pronto!';
+
+  @override
+  String get qrGeneratedSaved =>
+      'Seu código QR foi gerado e salvo no histórico.';
+
+  @override
+  String get qrSavedToGallery => 'Código QR salvo na galeria!';
+
+  @override
+  String sharePromoText(String url) {
+    return 'Digitalize este código QR gerado pelo SecureScan: $url';
+  }
 }

@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:phone_state/phone_state.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 
 class CallManager {
   static final CallManager _instance = CallManager._();
@@ -21,9 +23,9 @@ class CallManager {
       _subscription = PhoneState.stream.listen((event) {
         _handlePhoneState(event.status);
       });
-    } catch (e) {
-      print("Error initializing CallManager: $e");
-      // Continue app even if overlay setup fails
+    } catch (e, stack) {
+      debugPrint("Error initializing CallManager: $e");
+      FirebaseCrashlytics.instance.recordError(e, stack, reason: 'CallManager init failed');
     }
   }
 
@@ -33,7 +35,7 @@ class CallManager {
 
   void _handlePhoneState(PhoneStateStatus status) async {
     try {
-      print("Phone State Changed: $status");
+      debugPrint("Phone State Changed: $status");
 
       // Only handle initial launch on Incoming Call
       if (status == PhoneStateStatus.CALL_INCOMING) {
@@ -61,9 +63,9 @@ class CallManager {
       // to ensure it survives even if the main app is killed.
 
       _lastStatus = status;
-    } catch (e) {
-      print("Error in _handlePhoneState: $e");
-      // Don't let exceptions crash the app
+    } catch (e, stack) {
+      debugPrint("Error in _handlePhoneState: $e");
+      FirebaseCrashlytics.instance.recordError(e, stack, reason: 'Phone state handling failed');
     }
   }
 
@@ -86,9 +88,9 @@ class CallManager {
             : 40, // Small bubble for outgoing
         width: isFull ? WindowSize.matchParent : 40,
       );
-    } catch (e) {
-      print("Error showing overlay: $e");
-      // Continue without showing overlay if it fails
+    } catch (e, stack) {
+      debugPrint("Error showing overlay: $e");
+      FirebaseCrashlytics.instance.recordError(e, stack, reason: 'Showing overlay failed');
     }
     // We can't easily pass dynamic arguments to showOverlay in the current plugin version
     // unless we use shareData BEFORE or AFTER logic.

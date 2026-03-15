@@ -1,25 +1,26 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/services/ad_manager.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-import 'package:securescan/l10n/app_localizations.dart';
-import 'package:securescan/services/product_service.dart';
+import 'package:securescan/features/generate/screens/generator_screen.dart';
 import 'package:securescan/features/scan/screens/qr_result_screen.dart';
 import 'package:securescan/widgets/app_drawer.dart';
+import 'package:securescan/core/config/secrets.dart';
+import 'package:securescan/features/scan/services/scanner_service.dart';
+import 'package:securescan/core/enums/qr_type.dart';
+import 'package:securescan/core/models/history_item.dart';
+import 'package:securescan/core/repositories/history_repository.dart';
 
 class ScanScreenQR extends StatefulWidget {
   const ScanScreenQR({Key? key}) : super(key: key);
@@ -28,80 +29,13 @@ class ScanScreenQR extends StatefulWidget {
   State<ScanScreenQR> createState() => _ScanScreenQRState();
 }
 
-// -------------------- Result model for navigation --------------------
-
-class QrResultData {
-  final String raw;
-  final String? format; // e.g., "qrCode", "ean13"
-  final String kind; // "url", "phone", "product", "text", "wifi", "vcard", etc.
-  final Map<String, dynamic>? data;
-  final Uint8List? imageBytes; // captured frame
-  final DateTime timestamp;
-
-  const QrResultData({
-    required this.raw,
-    required this.kind,
-    this.format,
-    this.data,
-    this.imageBytes,
-    required this.timestamp,
-  });
-}
-
-// -------------------- Internal classification --------------------
-
-enum _PayloadKind {
-  url,
-  phone,
-  email,
-  wifi,
-  vcard,
-  calendar,
-  geo,
-  json,
-  text,
-  product,
-}
-
-class _Payload {
-  final _PayloadKind kind;
-  final String raw;
-  final Map<String, dynamic>? data;
-  final String? symbology;
-  final DateTime ts;
-  final String? imagePath;
-
-  _Payload(this.kind, this.raw, {this.data, this.symbology, this.imagePath, DateTime? ts})
-    : ts = ts ?? DateTime.now();
-
-  Map<String, dynamic> toJson() => {
-    'kind': kind.name,
-    'raw': raw,
-    'data': data,
-    'symbology': symbology,
-    'ts': ts.toIso8601String(),
-    'imagePath': imagePath,
-  };
-}
-
-// -------------------- Screen --------------------
-
 class _ScanScreenQRState extends State<ScanScreenQR>
     with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   static const Color _brandBlue = Color(0xFF0A66FF);
-  static const _prefsKey = 'scan_history';
-  static const _historyCap = 200;
-
-  /// Safe Browsing API key (optional)
-  String kSafeBrowsingApiKey = '';
-
-  // Product lookup API keys / configs (set these to your keys if you have them)
-  // Best coverage: BarcodeLookup (https://www.barcodelookup.com/) — requires API key
-  // Fallback: OpenProductFacts / OpenFoodFacts (community datasets)
 
   // Torch + zoom state
   bool _torchOn = false;
-  double _zoom = 1.0; // 1x .. ~4x
+  double _zoom = 1.0; 
   double _baseZoomOnScaleStart = 1.0;
 
   // Scanner controller
@@ -110,7 +44,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     detectionSpeed: DetectionSpeed.unrestricted,
     detectionTimeoutMs: 50,
     returnImage: true,
-    autoStart: true,
+    autoStart: false,
     formats: [
       BarcodeFormat.qrCode,
       BarcodeFormat.ean8,
@@ -126,56 +60,17 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   // Scan state
   String? _lastScanned;
   bool _isProcessing = false;
-  Map<String, dynamic>? _parsedJson;
   String? _docsDir;
 
   // Sweep animation
   late final AnimationController _sweepController;
   late final Animation<double> _sweep;
 
-  // --------- Interstitial Ad Fields ----------
-  InterstitialAd? _interstitialAd;
-  bool _isInterstitialReady = false;
-  int _interstitialLoadAttempts = 0;
-  static const int _maxInterstitialLoadAttempts = 3;
-
-  // Test interstitial provided by Google
-  static const String _googleTestInterstitialAdUnitId =
-      'ca-app-pub-3940256099942544/1033173712';
-
-  // Replace with your production interstitial unit id for release
-  static const String _productionInterstitialAdUnitId =
-      'ca-app-pub-2961863855425096/8982046403';
-
-  String get _interstitialAdUnitId => kDebugMode
-      ? _googleTestInterstitialAdUnitId
-      : _productionInterstitialAdUnitId;             
-
-  // --------- Banner Ad Fields ----------
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-  int _bannerLoadAttempts = 0;
-  static const int _maxBannerLoadAttempts = 3;
-
-  // Test banner provided by Google
-  static const String _googleTestBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-
-  // Replace with your production banner id
-  static const String _productionBannerAdUnitId =
-      'ca-app-pub-2961863855425096/5968213716';
-
-  String get _bannerAdUnitId =>
-      kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
-
   @override
   void initState() {
     super.initState();
-
-    // Log screen view to Firebase Analytics
     FirebaseAnalytics.instance.logScreenView(screenName: 'ScanScreenQR');
-
-    // Initialize docs dir for faster image saving in background
+    
     getApplicationDocumentsDirectory().then((dir) => _docsDir = dir.path);
 
     _sweepController = AnimationController(
@@ -184,26 +79,19 @@ class _ScanScreenQRState extends State<ScanScreenQR>
     )..repeat(reverse: true);
     _sweep = CurvedAnimation(parent: _sweepController, curve: Curves.easeInOut);
 
-    // load ads
-    _loadInterstitial();
-    _loadBannerAd();
+    AdManager.instance.loadInterstitialAd();
 
-    // Request camera permission — autoStart: true handles camera initialization
+    // Request camera permission
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      try {
-        final status = await Permission.camera.request();
-        if (status.isDenied || status.isPermanentlyDenied) {
-          _showIssueDialog(
-            AppLocalizations.of(context)!.cameraPermissionRequired,
-            actionText: AppLocalizations.of(context)!.openSettings,
-            onAction: () => openAppSettings(),
-          );
-          return;
+      final status = await Permission.camera.request();
+      if (status.isDenied || status.isPermanentlyDenied) {
+        if (mounted) {
+          _showIssueDialog(AppLocalizations.of(context)!.cameraPermissionRequired);
         }
-        // autoStart: true handles camera initialization
-      } catch (e) {
-        debugPrint('Camera start failed: $e');
+        return;
       }
+      await _cameraController.start();
+      if (mounted) setState(() {}); 
     });
 
     WidgetsBinding.instance.addObserver(this);
@@ -212,7 +100,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
-
     if (!_cameraController.value.isInitialized) return;
 
     switch (state) {
@@ -222,667 +109,180 @@ class _ScanScreenQRState extends State<ScanScreenQR>
         _cameraController.stop();
         break;
       case AppLifecycleState.resumed:
-        _lastScanned = null; // Allow re-scanning the same code after returning
+        _lastScanned = null;
         _cameraController.start();
         break;
       case AppLifecycleState.inactive:
-        // Keep camera running on inactive (e.g. notification shade) to avoid black screen
         break;
     }
   }
-
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _sweepController.dispose();
     _cameraController.dispose();
-
-    _interstitialAd?.dispose();
-    _bannerAd?.dispose();
-
     super.dispose();
   }
 
-  // -------------------- Interstitial handling --------------------
-
-  void _loadInterstitial() {
-    // dispose previous if any
-    _interstitialAd?.dispose();
-    _interstitialAd = null;
-    _isInterstitialReady = false;
-
-    InterstitialAd.load(
-      adUnitId: _interstitialAdUnitId,
-      request: const AdRequest(),
-      adLoadCallback: InterstitialAdLoadCallback(
-        onAdLoaded: (InterstitialAd ad) {
-          _interstitialLoadAttempts = 0;
-          _interstitialAd = ad;
-          _isInterstitialReady = true;
-
-          // set full screen content callbacks
-          _interstitialAd!.fullScreenContentCallback =
-              FullScreenContentCallback(
-                onAdShowedFullScreenContent: (ad) =>
-                    debugPrint('[Ads] Interstitial shown.'),
-                onAdDismissedFullScreenContent: (ad) {
-                  debugPrint('[Ads] Interstitial dismissed.');
-                  // dispose and preload next
-                  ad.dispose();
-                  _interstitialAd = null;
-                  _isInterstitialReady = false;
-                  _loadInterstitial();
-                },
-                onAdFailedToShowFullScreenContent: (ad, error) {
-                  debugPrint('[Ads] Interstitial failed to show: $error');
-                  ad.dispose();
-                  _interstitialAd = null;
-                  _isInterstitialReady = false;
-                  _loadInterstitial();
-                },
-              );
-
-          debugPrint('[Ads] Interstitial loaded.');
-        },
-        onAdFailedToLoad: (LoadAdError error) {
-          _interstitialLoadAttempts += 1;
-          _isInterstitialReady = false;
-          debugPrint(
-            '[Ads] Interstitial failed to load: $error (attempt $_interstitialLoadAttempts)',
-          );
-          if (_interstitialLoadAttempts <= _maxInterstitialLoadAttempts) {
-            final backoff = Duration(
-              seconds: 1 << (_interstitialLoadAttempts - 1),
-            );
-            Future.delayed(backoff, _loadInterstitial);
-          } else {
-            debugPrint(
-              '[Ads] Interstitial: giving up after $_interstitialLoadAttempts attempts.',
-            );
-          }
-        },
-      ),
-    );
-  }
-
-  Future<void> _showInterstitialThenNavigate(QrResultData result) async {
-    // Log scan event to Firebase Analytics
-    FirebaseAnalytics.instance.logEvent(
-      name: 'scan_success',
-      parameters: {'type': result.kind, 'format': result.format ?? 'unknown'},
-    );
-
-    if (_isInterstitialReady && _interstitialAd != null) {
-      try {
-        _interstitialAd!.show();
-
-        // Wait for dismissal (poll for _isInterstitialReady becoming false and ad being null)
-        final completer = Completer<void>();
-        final timeout = Timer(const Duration(seconds: 10), () {
-          if (!completer.isCompleted) completer.complete();
-        });
-
-        Timer.periodic(const Duration(milliseconds: 300), (timer) {
-          if (!mounted) {
-            if (!completer.isCompleted) completer.complete();
-            timer.cancel();
-            return;
-          }
-          if (!_isInterstitialReady && _interstitialAd == null) {
-            if (!completer.isCompleted) completer.complete();
-            timer.cancel();
-          }
-        });
-
-        await completer.future;
-        timeout.cancel();
-
-        if (!mounted) return;
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-        );
-      } catch (e) {
-        debugPrint(
-          '[Ads] Error showing interstitial: $e — navigating immediately.',
-        );
-        if (!mounted) return;
-        if (!mounted) return;
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-        );
-      }
-    } else {
-      // No interstitial ready — fall back to immediate navigation
-      if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => QrResultScreen(result: result)),
-      );
-    }
-  }
-
-  // -------------------- Banner handling --------------------
-
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _bannerAdUnitId,
-      request: const AdRequest(),
-      size: AdSize.banner,
-      listener: BannerAdListener(
-        onAdLoaded: (Ad ad) {
-          setState(() {
-            _isBannerAdReady = true;
-            _bannerLoadAttempts = 0;
-          });
-          debugPrint('[Ads] Banner loaded.');
-        },
-        onAdFailedToLoad: (Ad ad, LoadAdError error) {
-          ad.dispose();
-          _isBannerAdReady = false;
-          _bannerLoadAttempts += 1;
-          debugPrint(
-            '[Ads] Banner failed to load: $error (attempt $_bannerLoadAttempts)',
-          );
-          if (_bannerLoadAttempts <= _maxBannerLoadAttempts) {
-            final delaySeconds = 1 << (_bannerLoadAttempts - 1);
-            Future.delayed(Duration(seconds: delaySeconds), _loadBannerAd);
-          }
-        },
-      ),
-    );
-
-    _bannerAd!.load();
-  }
-
-  // -------------------- Detect & handle --------------------
-
   void _onDetect(BarcodeCapture capture) async {
     if (_isProcessing || capture.barcodes.isEmpty) return;
-    setState(() => _isProcessing = true);
-
     final picked = capture.barcodes.first;
-    // Capture the frame image returned by mobile_scanner
     final imageBytes = capture.image;
-
-    if (!mounted) {
-      _isProcessing = false;
-      return;
-    }
-
-    try {
-      // Proceed immediately with normal flow
-      await _handleBarcode(picked, imageBytes);
-    } catch (e) {
-      debugPrint('[Scanner] Error in _handleBarcode: $e');
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      } else {
-        _isProcessing = false;
-      }
-    }
+    await _handleBarcode(picked, imageBytes);
   }
-
-  void _applyZoom() {
-    // _zoom is UI value in range [1.0, 4.0]
-    final normalized = ((_zoom - 1.0) / 3.0).clamp(0.0, 1.0);
-    _cameraController.setZoomScale(normalized);
-  }
-
 
   Future<void> _handleBarcode(Barcode barcode, Uint8List? imageBytes) async {
     final raw = barcode.rawValue;
-    if (raw == null) return;
-
-    if (raw == _lastScanned) return;
+    if (raw == null || raw == _lastScanned) return;
 
     setState(() {
       _lastScanned = raw;
-      _parsedJson = null;
+      _isProcessing = true;
     });
 
-    // Capture image bytes in a local variable immediately so a subsequent
-    // detection callback cannot overwrite them before navigation completes.
-    final Uint8List? capturedImage = imageBytes;
-
-    // Try parsing JSON (for QR payloads)
-    try {
-      final decoded = jsonDecode(raw);
-      if (decoded is Map<String, dynamic>) {
-        _parsedJson = decoded;
+    final type = ScannerService.classify(raw, format: barcode.format.name);
+    
+    // Security check for risky URLs
+    if (type == QrType.url) {
+      final isRisky = raw.contains('bit.ly') || raw.contains('t.co') || raw.contains('tinyurl.com') || raw.contains('goo.gl');
+      if (isRisky) {
+        await _showIssueDialog('Security Warning: This shortened URL might lead to a suspicious website. Please scan with caution.');
       }
-    } catch (_) {
-      _parsedJson = null;
     }
 
-    // Optimize speed: Generate image path and start saving in background
     String? savedImagePath;
-    if (capturedImage != null && _docsDir != null) {
+    if (imageBytes != null && _docsDir != null) {
       final fileName = 'scan_${DateTime.now().millisecondsSinceEpoch}.jpg';
-      savedImagePath = '${_docsDir}/$fileName';
-      
-      () async {
-        try {
-          final file = File(savedImagePath!);
-          await file.writeAsBytes(capturedImage);
-          final payload = _classifyPayload(raw, symbology: barcode.format.name, imagePath: savedImagePath);
-          await _saveScan(payload);
-        } catch (e) {
-          debugPrint('[History] Async background save failed: $e');
-        }
-      }();
-    } else if (_docsDir == null) {
-      getApplicationDocumentsDirectory().then((dir) => _docsDir = dir.path);
+      savedImagePath = '$_docsDir/$fileName';
+      try {
+        await File(savedImagePath).writeAsBytes(imageBytes);
+      } catch (e) {
+        debugPrint('[Scanner] Failed to save image: $e');
+      }
     }
 
-    final payload = _classifyPayload(raw, symbology: barcode.format.name, imagePath: savedImagePath);
-
-    // Prepare result — use the local capturedImage.
-    // We DON'T fetch product info here anymore to keep scanning instant.
-    // QrResultScreen will handle the fetch asynchronously.
-    final result = QrResultData(
-      raw: payload.raw,
-      kind: payload.kind.name,
-      format: payload.symbology,
-      data: payload.data,
-      imageBytes: capturedImage,
-      timestamp: payload.ts,
+    final historyItem = await ScannerService.saveToHistory(
+      raw: raw,
+      type: type,
+      imagePath: savedImagePath,
+      imageBytes: imageBytes,
+      metadata: {'format': barcode.format.name, ... (barcode.rawValue != null ? {'raw': barcode.rawValue} : {})},
     );
 
-    // --- [NEW] Mock Security Check for Risky URLs ---
-    if (payload.kind == _PayloadKind.url) {
-      final isRisky = raw.contains('bit.ly') ||
-          raw.contains('t.co') ||
-          raw.contains('tinyurl.com') ||
-          raw.contains('goo.gl');
-      if (isRisky) {
-        await _showIssueDialog(
-          'Security Warning: This shortened URL might lead to a suspicious website. Please scan with caution.',
-        );
-      }
-    }
+    // analytics
+    FirebaseAnalytics.instance.logEvent(
+      name: 'scan_success',
+      parameters: {'type': type.name, 'format': barcode.format.name},
+    );
 
-    // --- show interstitial (if ready) and then navigate ---
-    await _showInterstitialThenNavigate(result);
+    await AdManager.instance.showInterstitialAd();
+    if (!mounted) return;
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => QrResultScreen(result: historyItem)),
+    );
 
-    // Unblock detection pipeline only after navigation is complete
     setState(() => _isProcessing = false);
   }
 
-  // --- [NEW] Issue Dialog with Black Screen Background ---
-  Future<void> _showIssueDialog(
-    String message, {
-    String? actionText,
-    VoidCallback? onAction,
-  }) async {
-    if (!mounted) return;
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    await showGeneralDialog(
-      context: context,
-      barrierColor: Colors.transparent, // No black screen/overlay
-      barrierDismissible: true,
-      barrierLabel: 'Scan Issue',
-      transitionDuration: const Duration(milliseconds: 300),
-      pageBuilder: (context, animation, secondaryAnimation) {
-        return FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: animation,
-            child: Center(
-              child: Material(
-                color: Colors.transparent,
-                child: Container(
-                  width: MediaQuery.of(context).size.width * 0.85,
-                  padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E1E1E) : Colors.white,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(
-                      color: Colors.redAccent.withValues(alpha: 0.3),
-                      width: 1.5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
-                        blurRadius: 40,
-                        spreadRadius: 2,
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(18),
-                        decoration: BoxDecoration(
-                          color: Colors.redAccent.withValues(alpha: 0.15),
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.error_outline_rounded,
-                          color: Colors.redAccent,
-                          size: 42,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'SCANNING ISSUE',
-                        style: GoogleFonts.outfit(
-                          color: isDark ? Colors.white : Colors.black87,
-                          fontSize: 22,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        message,
-                        textAlign: TextAlign.center,
-                        style: GoogleFonts.inter(
-                          color: isDark ? Colors.white.withValues(alpha: 0.75) : Colors.black54,
-                          fontSize: 16,
-                          height: 1.6,
-                        ),
-                      ),
-                      const SizedBox(height: 32),
-                      if (actionText != null && onAction != null) ...[
-                        SizedBox(
-                          width: double.infinity,
-                          height: 54,
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _brandBlue,
-                              foregroundColor: Colors.white,
-                              elevation: 0,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                              onAction();
-                            },
-                            child: Text(
-                              actionText.toUpperCase(),
-                              style: const TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.w800,
-                                letterSpacing: 1.5,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                      ],
-                      SizedBox(
-                        width: double.infinity,
-                        height: 54,
-                        child: OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: isDark ? Colors.white60 : Colors.black54,
-                            side: BorderSide(
-                              color: isDark ? Colors.white.withValues(alpha: 0.1) : Colors.black.withValues(alpha: 0.1),
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                          ),
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: Text(
-                            AppLocalizations.of(context)!.close.toUpperCase(),
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  // Scan from gallery
   Future<void> _scanFromGallery() async {
     if (_isProcessing) return;
-
     final picked = await _picker.pickImage(source: ImageSource.gallery);
     if (picked == null) return;
 
     setState(() => _isProcessing = true);
-
     try {
-      final capture = await _cameraController.analyzeImage(picked.path);
-
-      if (capture == null || capture.barcodes.isEmpty) {
-        if (mounted) {
-          _showIssueDialog(AppLocalizations.of(context)!.noCodeFound);
-        }
+      final historyItem = await ScannerService.scanImage(picked.path);
+      if (historyItem == null) {
+        if (mounted) _showIssueDialog(AppLocalizations.of(context)!.noCodeFound);
         setState(() => _isProcessing = false);
         return;
       }
-
-      // Use frame image from capture if present, otherwise fallback to file bytes
-      Uint8List? frameBytes = capture.image;
-      frameBytes ??= await picked.readAsBytes();
-
-      final barcode = capture.barcodes.first;
-      await _handleBarcode(barcode, frameBytes);
+      
+      final frameBytes = await picked.readAsBytes();
+      await _handleBarcodeMLKit(historyItem, frameBytes);
     } catch (e) {
-      // if (mounted) {
-      //   _showIssueDialog(AppLocalizations.of(context)!.failedToScan(e.toString()));
-      // }
+      if (mounted) _showIssueDialog(AppLocalizations.of(context)!.failedToScan(e.toString()));
       setState(() => _isProcessing = false);
     }
   }
 
-  // -------------------- Classification --------------------
+  Future<void> _handleBarcodeMLKit(HistoryItem historyItem, Uint8List imageBytes) async {
+    // This is a helper to handle results from ML Kit scan (gallery)
+    // Similar to _handleBarcode but already has history item basics
+    final raw = historyItem.value;
+    final type = historyItem.type;
 
-  static final _urlRegex = RegExp(
-    r'^(https?:\/\/)[^\s]+$',
-    caseSensitive: false,
-  );
-  static final _phoneRegex = RegExp(r'^\+?[0-9]{6,15}$');
-  static final _geoRegex = RegExp(
-    r'^(?:geo:)?\s*(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)(?:,.*)?$',
-    caseSensitive: false,
-  );
-
-  _Payload _classifyPayload(String raw, {String? symbology, String? imagePath}) {
-    final s = raw.trim();
-    final sym = (symbology ?? '').toLowerCase();
-
-    // Isbn / Product (from Format)
-    if (sym.contains('ean') || sym.contains('upc') || sym.contains('isbn')) {
-      final isIsbn = sym.contains('isbn');
-      final code = s;
-      return _Payload(
-        _PayloadKind.product,
-        s,
-        symbology: symbology,
-        data: {'code': code, 'isIsbn': isIsbn},
-        imagePath: imagePath,
-      );
+    String? savedImagePath;
+    if (_docsDir != null) {
+      final fileName = 'scan_gallery_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      savedImagePath = '$_docsDir/$fileName';
+      try {
+        await File(savedImagePath).writeAsBytes(imageBytes);
+      } catch (_) {}
     }
 
-    // ----- QR & generic classification -----
+    final finalizedItem = await ScannerService.saveToHistory(
+      raw: raw,
+      type: type,
+      imagePath: savedImagePath,
+      imageBytes: imageBytes,
+      metadata: historyItem.metadata,
+    );
 
-    // URL
-    if (s.toLowerCase().startsWith('http://') ||
-        s.toLowerCase().startsWith('https://')) {
-      return _Payload(
-        _PayloadKind.url,
-        s,
-        symbology: symbology,
-        imagePath: imagePath,
-      );
-    }
+    await AdManager.instance.showInterstitialAd();
+    if (!mounted) return;
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => QrResultScreen(result: finalizedItem)),
+    );
 
-    // Phone
-    if (s.startsWith('tel:')) {
-      return _Payload(_PayloadKind.phone, s.substring(4), symbology: symbology, imagePath: imagePath);
-    }
-    if (_phoneRegex.hasMatch(s)) {
-      return _Payload(_PayloadKind.phone, s, symbology: symbology, imagePath: imagePath);
-    }
-
-    // Email
-    if (s.toLowerCase().startsWith('mailto:')) {
-      final addr = s.substring(7);
-      return _Payload(
-        _PayloadKind.email,
-        addr,
-        data: {'mailto': s},
-        symbology: symbology,
-        imagePath: imagePath,
-      );
-    }
-    if (RegExp(r'^[\w\.\-+]+@[\w\.\-]+\.[A-Za-z]{2,}\$').hasMatch(s)) {
-      return _Payload(_PayloadKind.email, s, symbology: symbology, imagePath: imagePath);
-    }
-
-    // Wi-Fi
-    if (s.startsWith('WIFI:')) {
-      final parts = <String, String>{};
-      for (final seg in s.substring(5).split(';')) {
-        if (seg.trim().isEmpty) continue;
-        final idx = seg.indexOf(':');
-        if (idx == -1) continue;
-        parts[seg.substring(0, idx)] = seg.substring(idx + 1);
-      }
-      return _Payload(
-        _PayloadKind.wifi,
-        s,
-        data: {
-          'ssid': parts['S'] ?? '',
-          'auth': parts['T'] ?? '',
-          'password': parts['P'] ?? '',
-          'hidden': parts['H'] == 'true',
-        },
-        symbology: symbology,
-        imagePath: imagePath,
-      );
-    }
-
-    // vCard
-    if (s.contains('BEGIN:VCARD')) {
-      return _Payload(_PayloadKind.vcard, s, symbology: symbology, imagePath: imagePath);
-    }
-
-    // Calendar
-    if (s.contains('BEGIN:VEVENT') || s.contains('BEGIN:VCALENDAR')) {
-      return _Payload(_PayloadKind.calendar, s, symbology: symbology, imagePath: imagePath);
-    }
-
-    // Geo
-    final gm = _geoRegex.firstMatch(s);
-    if (gm != null) {
-      final lat = double.tryParse(gm.group(1)!);
-      final lng = double.tryParse(gm.group(2)!);
-      return _Payload(
-        _PayloadKind.geo,
-        s,
-        data: {'lat': lat, 'lng': lng},
-        symbology: symbology,
-        imagePath: imagePath,
-      );
-    }
-
-    // JSON
-    if (_parsedJson != null) {
-      return _Payload(
-        _PayloadKind.json,
-        s,
-        data: _parsedJson,
-        symbology: symbology,
-        imagePath: imagePath,
-      );
-    }
-
-    // Plain text
-    try {
-      return _Payload(_PayloadKind.text, s, symbology: symbology, imagePath: imagePath);
-    } catch (_) {
-      return _Payload(_PayloadKind.text, s, symbology: symbology, imagePath: imagePath);
-    }
+    setState(() => _isProcessing = false);
   }
 
-  // -------------------- History --------------------
-
-  Future<void> _saveScan(_Payload payload) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final list = prefs.getStringList(_prefsKey) ?? <String>[];
-
-      list.add(jsonEncode(payload.toJson()));
-
-      if (list.length > _historyCap) {
-        // Prune older items & clean up their image files to prevent storage leak
-        final toRemove = list.sublist(0, list.length - _historyCap);
-        for (final itemJson in toRemove) {
-          try {
-            final map = jsonDecode(itemJson);
-            final path = map['imagePath']?.toString();
-            if (path != null) {
-              final file = File(path);
-              if (await file.exists()) {
-                await file.delete();
-              }
-            }
-          } catch (_) {}
-        }
-        final pruned = list.sublist(list.length - _historyCap);
-        await prefs.setStringList(_prefsKey, pruned);
-      } else {
-        await prefs.setStringList(_prefsKey, list);
-      }
-    } catch (_) {
-      // ignore
-    }
+  void _applyZoom() {
+    final normalized = ((_zoom - 1.0) / 3.0).clamp(0.0, 1.0);
+    _cameraController.setZoomScale(normalized);
   }
 
-  // -------------------- UI --------------------
+  Future<void> _showIssueDialog(String message) async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.scanDetail),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.ok),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
-
     final double frameW = size.width * 0.86;
     final double frameH = frameW;
 
-    // compute banner height (if ready) to avoid overlaps (approx + margin)
-    final double adHeight = _isBannerAdReady && _bannerAd != null
-        ? _bannerAd!.size.height.toDouble() + 12
-        : 0.0;
-
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.black,
       drawer: const AppDrawer(),
       body: Stack(
         children: [
-          // Camera preview with pinch-to-zoom
           Positioned.fill(
             child: GestureDetector(
-              onScaleStart: (details) {
-                _baseZoomOnScaleStart = _zoom;
-              },
+              onScaleStart: (details) => _baseZoomOnScaleStart = _zoom,
               onScaleUpdate: (details) {
                 if (details.pointerCount < 2) return;
-                final newZoom = (_baseZoomOnScaleStart * details.scale)
-                    .clamp(1.0, 4.0);
-                setState(() {
-                  _zoom = newZoom;
-                });
+                setState(() => _zoom = (_baseZoomOnScaleStart * details.scale).clamp(1.0, 4.0));
                 _applyZoom();
               },
               child: MobileScanner(
@@ -892,8 +292,6 @@ class _ScanScreenQRState extends State<ScanScreenQR>
               ),
             ),
           ),
-
-          // Top controls (drawer, flash, gallery, switch camera)
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
@@ -909,9 +307,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                   _roundIconButton(
                     icon: _torchOn ? Icons.flash_on : Icons.flash_off,
                     onTap: () async {
-                      try {
-                        await _cameraController.toggleTorch();
-                      } catch (_) {}
+                      try { await _cameraController.toggleTorch(); } catch (_) {}
                       setState(() => _torchOn = !_torchOn);
                     },
                   ),
@@ -929,13 +325,9 @@ class _ScanScreenQRState extends State<ScanScreenQR>
               ),
             ),
           ),
-          // Safe Scan overlay (3s animation)
-
-          // Framing + sweep
           Align(
             alignment: Alignment.center,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 220),
+            child: SizedBox(
               width: frameW,
               height: frameH,
               child: Stack(
@@ -956,9 +348,7 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                       final bandH = frameH * 0.42;
                       final y = (_sweep.value * (frameH - bandH));
                       return Positioned(
-                        left: 0,
-                        right: 0,
-                        top: y,
+                        left: 0, right: 0, top: y,
                         child: IgnorePointer(
                           child: Container(
                             height: bandH,
@@ -968,12 +358,11 @@ class _ScanScreenQRState extends State<ScanScreenQR>
                                 begin: Alignment.topCenter,
                                 end: Alignment.bottomCenter,
                                 colors: [
-                                  _brandBlue.withValues(alpha: 0.55),
-                                  _brandBlue.withValues(alpha: 0.30),
-                                  _brandBlue.withValues(alpha: 0.10),
+                                  _brandBlue.withOpacity(0.55),
+                                  _brandBlue.withOpacity(0.30),
+                                  _brandBlue.withOpacity(0.10),
                                   Colors.transparent,
                                 ],
-                                stops: const [0, 0.45, 0.8, 1],
                               ),
                             ),
                           ),
@@ -985,138 +374,56 @@ class _ScanScreenQRState extends State<ScanScreenQR>
               ),
             ),
           ),
-
-          // Hint text (lifted up by banner height to avoid overlap)
           Positioned(
-            left: 0,
-            right: 0,
-            bottom: 130 + (adHeight > 0 ? adHeight - 12 : 0),
+            left: 0, right: 0, bottom: 130,
             child: const _HintBubble(text: 'Point camera at a code to scan'),
           ),
-
-          // Zoom slider (also lifted)
           Positioned(
-            left: 16,
-            right: 16,
-            bottom: 80 + (adHeight > 0 ? adHeight - 12 : 0),
+            left: 16, right: 16, bottom: 80,
             child: Row(
               children: [
-                Icon(
-                  Icons.zoom_out,
-                  color: _zoom > 1.0 ? Colors.white : Colors.white38,
-                  size: 20,
-                ),
+                const Icon(Icons.zoom_out, color: Colors.white, size: 20),
                 Expanded(
-                  child: SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: Colors.white,
-                      inactiveTrackColor: Colors.white24,
-                      thumbColor: Colors.white,
-                      overlayColor: Colors.white24,
-                      trackHeight: 3,
-                    ),
-                    child: Slider(
-                      min: 1.0,
-                      max: 4.0,
-                      value: _zoom,
-                      onChanged: (value) {
-                        setState(() {
-                          _zoom = value;
-                        });
-                        _applyZoom();
-                      },
-                    ),
+                  child: Slider(
+                    min: 1.0, max: 4.0, value: _zoom,
+                    onChanged: (value) {
+                      setState(() => _zoom = value);
+                      _applyZoom();
+                    },
                   ),
                 ),
-                Icon(
-                  Icons.zoom_in,
-                  color: _zoom < 4.0 ? Colors.white : Colors.white38,
-                  size: 20,
-                ),
+                const Icon(Icons.zoom_in, color: Colors.white, size: 20),
               ],
             ),
           ),
-
-          // Banner Ad at bottom (shows only when loaded)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: _isBannerAdReady && _bannerAd != null
-                ? Container(
-                    margin: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: SafeArea(
-                      top: false,
-                      child: SizedBox(
-                        height: _bannerAd!.size.height.toDouble(),
-                        child: Center(
-                          child: SizedBox(
-                            width: _bannerAd!.size.width.toDouble(),
-                            height: _bannerAd!.size.height.toDouble(),
-                            child: AdWidget(ad: _bannerAd!),
-                          ),
-                        ),
-                      ),
-                    ),
-                  )
-                : const SizedBox.shrink(),
+          const Positioned(
+            left: 0, right: 0, bottom: 0,
+            child: SafeArea(top: false, child: BannerAdWidget()),
           ),
         ],
       ),
     );
   }
 
-  // -------------------- Widget helpers --------------------
-
-  Widget _roundIconButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
+  Widget _roundIconButton({required IconData icon, required VoidCallback onTap}) {
     return Material(
-      color: Colors.black54,
+      color: Colors.black45,
       shape: const CircleBorder(),
-      clipBehavior: Clip.antiAlias,
       child: InkWell(
         onTap: onTap,
         customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 44,
-          height: 44,
-          child: Icon(icon, color: Colors.white, size: 22),
-        ),
+        child: SizedBox(width: 44, height: 44, child: Icon(icon, color: Colors.white, size: 22)),
       ),
     );
   }
 
-  Widget _cornerGuide({
-    bool top = false,
-    bool left = false,
-    bool right = false,
-    bool bottom = false,
-  }) {
-    const double len = 28;
-    const double thick = 5;
+  Widget _cornerGuide({bool top = false, bool left = false, bool right = false, bool bottom = false}) {
     return Positioned(
-      top: top ? 0 : null,
-      bottom: bottom ? 0 : null,
-      left: left ? 0 : null,
-      right: right ? 0 : null,
+      top: top ? 0 : null, bottom: bottom ? 0 : null,
+      left: left ? 0 : null, right: right ? 0 : null,
       child: CustomPaint(
-        size: const Size(len, len),
-        painter: _CornerPainter(
-          color: _brandBlue,
-          thickness: thick,
-          top: top,
-          left: left,
-          right: right,
-          bottom: bottom,
-        ),
+        size: const Size(28, 28),
+        painter: _CornerPainter(color: _brandBlue, thickness: 5, top: top, left: left, right: right, bottom: bottom),
       ),
     );
   }
@@ -1125,70 +432,34 @@ class _ScanScreenQRState extends State<ScanScreenQR>
 class _HintBubble extends StatelessWidget {
   final String text;
   const _HintBubble({required this.text});
-
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       margin: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: BoxDecoration(
-        color: Colors.black45,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: Text(
-        text,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: Colors.white),
-      ),
+      decoration: BoxDecoration(color: Colors.black45, borderRadius: BorderRadius.circular(8)),
+      child: Text(text, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white)),
     );
   }
 }
 
-// Painter for blue corner brackets
 class _CornerPainter extends CustomPainter {
   final Color color;
   final double thickness;
   final bool top, left, right, bottom;
-
-  _CornerPainter({
-    required this.color,
-    required this.thickness,
-    required this.top,
-    required this.left,
-    required this.right,
-    required this.bottom,
-  });
+  _CornerPainter({required this.color, required this.thickness, required this.top, required this.left, required this.right, required this.bottom});
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = thickness
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round;
-
+    final paint = Paint()..color = color..strokeWidth = thickness..style = PaintingStyle.stroke..strokeCap = StrokeCap.round;
     final path = Path();
-    if (top && left) {
-      path.moveTo(0, size.height * 0.6);
-      path.lineTo(0, 0);
-      path.lineTo(size.width * 0.6, 0);
-    } else if (top && right) {
-      path.moveTo(size.width * 0.4, 0);
-      path.lineTo(size.width, 0);
-      path.lineTo(size.width, size.height * 0.6);
-    } else if (bottom && left) {
-      path.moveTo(0, size.height * 0.4);
-      path.lineTo(0, size.height);
-      path.lineTo(size.width * 0.6, size.height);
-    } else if (bottom && right) {
-      path.moveTo(size.width * 0.4, size.height);
-      path.lineTo(size.width, size.height);
-      path.lineTo(size.width, size.height * 0.4);
-    }
+    if (top && left) { path.moveTo(0, size.height * 0.6); path.lineTo(0, 0); path.lineTo(size.width * 0.6, 0); }
+    else if (top && right) { path.moveTo(size.width * 0.4, 0); path.lineTo(size.width, 0); path.lineTo(size.width, size.height * 0.6); }
+    else if (bottom && left) { path.moveTo(0, size.height * 0.4); path.lineTo(0, size.height); path.lineTo(size.width * 0.6, size.height); }
+    else if (bottom && right) { path.moveTo(size.width * 0.4, size.height); path.lineTo(size.width, size.height); path.lineTo(size.width, size.height * 0.4); }
     canvas.drawPath(path, paint);
   }
 
   @override
-  bool shouldRepaint(covariant _CornerPainter old) =>
-      old.color != color || old.thickness != thickness;
+  bool shouldRepaint(covariant _CornerPainter old) => false;
 }

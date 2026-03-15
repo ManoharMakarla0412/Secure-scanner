@@ -6,11 +6,12 @@ import 'dart:ui' as ui;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:share_plus/share_plus.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 
 import '../../../themes.dart';
 
@@ -43,51 +44,18 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
   final GlobalKey _repaintKey = GlobalKey();
   bool _working = false;
 
-  // ---- Banner Ad ----
-  BannerAd? _bannerAd;
-  bool _isBannerAdReady = false;
-  static const String _googleTestBannerAdUnitId =
-      'ca-app-pub-3940256099942544/6300978111';
-  static const String _productionBannerAdUnitId =
-      'ca-app-pub-2961863855425096/5968213716';
-
-  String get _adUnitId =>
-      kDebugMode ? _googleTestBannerAdUnitId : _productionBannerAdUnitId;
-
-  int _loadAttempts = 0;
-  static const int _maxLoadAttempts = 3;
+  // Ad Unit IDs managed in AdManager
 
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
   }
 
-  void _loadBannerAd() {
-    _bannerAd?.dispose();
-    _bannerAd = BannerAd(
-      adUnitId: _adUnitId,
-      request: const AdRequest(),
-      size: AdSize.mediumRectangle,
-      listener: BannerAdListener(
-        onAdLoaded: (_) => setState(() => _isBannerAdReady = true),
-        onAdFailedToLoad: (ad, error) {
-          ad.dispose();
-          _isBannerAdReady = false;
-          if (++_loadAttempts <= _maxLoadAttempts) {
-            Future.delayed(
-              Duration(seconds: 1 << (_loadAttempts - 1)),
-              _loadBannerAd,
-            );
-          }
-        },
-      ),
-    )..load();
-  }
+
+  // Ad loading handled by BannerAdWidget
 
   @override
   void dispose() {
-    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -110,8 +78,8 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     }
   }
 
-  /// Conventional save: write PNG bytes to the app documents directory and show path.
-  Future<void> _saveToDocuments() async {
+  /// Conventional save: write PNG bytes to the gallery and show success dialog.
+  Future<void> _saveToGallery() async {
     setState(() => _working = true);
 
     final bytes = await _capturePngBytes();
@@ -126,15 +94,17 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     }
 
     try {
-      final docDir = await getApplicationDocumentsDirectory();
-      final filename = 'qr_${DateTime.now().millisecondsSinceEpoch}.png';
-      final file = File('${docDir.path}/$filename');
-      await file.writeAsBytes(bytes);
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final filename = 'qr_$timestamp.png';
+      
+      // Save to gallery using gal
+      await Gal.putImageBytes(bytes, album: 'SecureScanner');
 
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.qrSaved(file.path))));
+        _showSuccessDialog(
+          l10n: AppLocalizations.of(context)!,
+          filename: filename,
+        );
       }
     } catch (e) {
       if (kDebugMode) print('save error: $e');
@@ -146,6 +116,31 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     } finally {
       setState(() => _working = false);
     }
+  }
+
+  void _showSuccessDialog({
+    required AppLocalizations l10n,
+    required String filename,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.check_circle, color: Colors.green),
+            const SizedBox(width: 4),
+            Text("Download Successful",style: TextStyle(fontSize: 14),),
+          ],
+        ),
+        content: Text(l10n.qrSaved(filename)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.close),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _shareImage() async {
@@ -268,8 +263,8 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
     } else if (t == 'url') {
       return val;
     } else {
-      // fallback: show at most 120 chars
-      return val.length <= 120 ? val : '${val.substring(0, 120)}...';
+      // fallback: show more chars for text results
+      return val.length <= 150 ? val : '${val.substring(0, 150)}...';
     }
   }
 
@@ -347,6 +342,8 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                                 data: widget.value,
                                 version: QrVersions.auto,
                                 backgroundColor: Colors.white,
+                                gapless: false,
+                                errorCorrectionLevel: QrErrorCorrectLevel.Q,
                               ),
                             ),
                             SizedBox(height: size.height * 0.02),
@@ -403,7 +400,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
                                 AppLocalizations.of(context)!.save.toUpperCase(),
                                 style: const TextStyle(color: Colors.white),
                               ),
-                              onPressed: _working ? null : _saveToDocuments,
+                              onPressed: _working ? null : _saveToGallery,
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: SecureScanTheme.accentBlue,
                                 padding: EdgeInsets.symmetric(
@@ -452,16 +449,7 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
             ),
           ),
 
-            // Banner-style ad slot at bottom
-            if (_isBannerAdReady && _bannerAd != null)
-              Container(
-                width: double.infinity,
-                height: _bannerAd!.size.height.toDouble(),
-                alignment: Alignment.center,
-                child: AdWidget(ad: _bannerAd!),
-              )
-            else
-              const SizedBox.shrink(),
+            const BannerAdWidget(),
           ],
         ),
       ),

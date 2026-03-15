@@ -156,5 +156,24 @@
   "permissionCameraDesc": "QRコードやバーコードのスキャンに必要です",
   "permissionGalleryDesc": "ギャラリーから画像を選択するために必要です",
   "statusGranted": "許可済み",
-  "statusDenied": "拒否済み"
+  "statusDenied": "拒否済み",
+  "downloadSuccess": "ダウンロード成功",
+  "legalInfo": "法的情報",
+  "download": "ダウンロード",
+  "edit": "編集",
+  "backToMain": "メインに戻る",
+  "ok": "OK",
+  "scanDetail": "スキャンの詳細",
+  "scanResultTitle": "スキャン結果",
+  "qrCodeReady": "QRコードの準備ができました！",
+  "qrGeneratedSaved": "QRコードが生成され、履歴に保存されました。",
+  "qrSavedToGallery": "QRコードがギャラリーに保存されました！",
+  "sharePromoText": "SecureScanで生成されたこのQRコードをスキャンしてください: {url}",
+  "@sharePromoText": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  }
 }

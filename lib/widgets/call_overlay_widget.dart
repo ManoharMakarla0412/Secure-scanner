@@ -4,6 +4,7 @@ import 'package:flutter_overlay_window/flutter_overlay_window.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:phone_state/phone_state.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -20,14 +21,12 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   _phoneStateSubscription; // Phone state listener
   Timer? _autoDismissTimer; // Timer for auto-closing call ended popup
 
-  BannerAd? _bannerAd;
-  bool _isAdLoaded = false;
+  // Ad state managed by BannerAdWidget
   String? _phoneNumber;
 
   @override
   void initState() {
     super.initState();
-    _loadBannerAd();
 
     // Listen to data from main app
     FlutterOverlayWindow.overlayListener.listen((event) {
@@ -80,32 +79,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
     });
   }
 
-  void _loadBannerAd() {
-    try {
-      _bannerAd = BannerAd(
-        adUnitId:
-            'ca-app-pub-4377808055186677/6096672505', // Use provided ID or test ID for dev
-        size: AdSize.mediumRectangle, // 300x250 for Option 3
-        request: const AdRequest(),
-        listener: BannerAdListener(
-          onAdLoaded: (ad) {
-            if (mounted) {
-              setState(() {
-                _isAdLoaded = true;
-              });
-            }
-          },
-          onAdFailedToLoad: (ad, error) {
-            ad.dispose();
-            debugPrint('Ad failed to load: $error');
-          },
-        ),
-      )..load();
-    } catch (e) {
-      debugPrint('Error loading banner ad: $e');
-      _isAdLoaded = false;
-    }
-  }
+  // Ad loading handled by BannerAdWidget
 
   void _startAutoDismissTimer() {
     debugPrint('[Timer] Starting auto-dismiss timer for 5 seconds');
@@ -140,7 +114,6 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
   void dispose() {
     _phoneStateSubscription?.cancel();
     _autoDismissTimer?.cancel();
-    _bannerAd?.dispose();
     super.dispose();
   }
 
@@ -341,44 +314,7 @@ class _CallOverlayWidgetState extends State<CallOverlayWidget> {
 
               const Spacer(),
 
-              // Ad Section
-              if (_isAdLoaded && _bannerAd != null)
-                Container(
-                  width: _bannerAd!.size.width.toDouble(),
-                  height: _bannerAd!.size.height.toDouble(),
-                  alignment: Alignment.center,
-                  child: AdWidget(ad: _bannerAd!),
-                )
-              else
-                Container(
-                  width: double.infinity,
-                  height: 250, // Medium Rectangle height
-                  decoration: const BoxDecoration(color: Color(0xFF475569)),
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          "Advertisement",
-                          style: GoogleFonts.inter(
-                            color: Colors.white54,
-                            fontSize: 12,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        const Icon(
-                          Icons.ad_units,
-                          color: Colors.white24,
-                          size: 48,
-                        ),
-                        Text(
-                          "Loading Ad...",
-                          style: GoogleFonts.inter(color: Colors.white24),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+              const BannerAdWidget(),
             ],
           ),
         ),

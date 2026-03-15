@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:securescan/core/constants/app_assets.dart';
 import 'package:securescan/l10n/app_localizations.dart';
 import '../features/scan/screens/home_screen.dart';
 import '../features/history/screens/history_screen.dart';
@@ -41,7 +42,10 @@ class _BottomNavShellState extends State<BottomNavShell> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_index],
+      body: IndexedStack(
+        index: _index,
+        children: _pages,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
         onTap: _onTabSelected,
@@ -49,9 +53,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
           BottomNavigationBarItem(
             label: AppLocalizations.of(context)!.home,
             icon: Image.asset(
-              _index == 0
-                  ? 'assets/icons/bottom_nav_icons/home_active.png'
-                  : 'assets/icons/bottom_nav_icons/home_inactive.png',
+              _index == 0 ? AppAssets.homeActive : AppAssets.homeInactive,
               width: 18,
               height: 18,
             ),
@@ -59,9 +61,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
           BottomNavigationBarItem(
             label: AppLocalizations.of(context)!.history,
             icon: Image.asset(
-              _index == 1
-                  ? 'assets/icons/bottom_nav_icons/history_active.png'
-                  : 'assets/icons/bottom_nav_icons/history_inactive.png',
+              _index == 1 ? AppAssets.historyActive : AppAssets.historyInactive,
               width: 18,
               height: 18,
             ),
@@ -69,9 +69,7 @@ class _BottomNavShellState extends State<BottomNavShell> {
           BottomNavigationBarItem(
             label: AppLocalizations.of(context)!.settingsTitle,
             icon: Image.asset(
-              _index == 2
-                  ? 'assets/icons/bottom_nav_icons/settings_active.png'
-                  : 'assets/icons/bottom_nav_icons/settings_inactive.png',
+              _index == 2 ? AppAssets.settingsActive : AppAssets.settingsInactive,
               width: 18,
               height: 18,
             ),

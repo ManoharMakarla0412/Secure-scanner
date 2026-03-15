@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -9,12 +10,19 @@ import 'firebase_options.dart';
 import 'package:securescan/features/scan/screens/scan_screen_qr.dart';
 import 'package:securescan/themes.dart';
 import 'package:securescan/services/language_service.dart';
+import 'package:securescan/services/ad_manager.dart';
 import 'app.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Run independent initializations in parallel
+  await Future.wait([
+    Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform),
+    AdManager.instance.init(),
+    SecureScanThemeController.instance.init(),
+    LanguageController.instance.init(),
+  ]);
 
   // Send Flutter errors to Crashlytics
   FlutterError.onError = FirebaseCrashlytics.instance.recordFlutterFatalError;
@@ -28,11 +36,13 @@ void main() async {
   // Enable Google Fonts runtime fetching to avoid errors if assets are missing
   GoogleFonts.config.allowRuntimeFetching = true;
 
-  await MobileAds.instance.initialize();
-  await SecureScanThemeController.instance.init();
-  await LanguageController.instance.init();
-
   SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+  await SystemChrome.setPreferredOrientations([
+    DeviceOrientation.portraitUp,
+    DeviceOrientation.portraitDown,
+    DeviceOrientation.landscapeLeft,
+    DeviceOrientation.landscapeRight,
+  ]);
   runApp(const SecureScanApp());
 }
 

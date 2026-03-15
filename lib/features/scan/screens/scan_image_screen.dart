@@ -2,7 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:securescan/features/scan/services/scanner_service.dart';
+import 'package:securescan/l10n/app_localizations.dart';
 
 class ScanImageScreen extends StatefulWidget {
   const ScanImageScreen({super.key});
@@ -13,7 +14,6 @@ class ScanImageScreen extends StatefulWidget {
 
 class _ScanImageScreenState extends State<ScanImageScreen> {
   final ImagePicker _picker = ImagePicker();
-  final MobileScannerController _controller = MobileScannerController();
 
   XFile? _selectedImage;
   bool _isScanning = false;
@@ -33,18 +33,30 @@ class _ScanImageScreenState extends State<ScanImageScreen> {
     });
 
     try {
-      final capture = await _controller.analyzeImage(image.path);
-      if (capture != null && capture.barcodes.isNotEmpty) {
-        final first = capture.barcodes.first;
-        final value = first.rawValue ?? '';
+      final historyItem = await ScannerService.scanImage(image.path);
+      if (historyItem != null) {
         setState(() {
-          _resultText = value.isEmpty
-              ? 'QR / Barcode detected, but has no data.'
-              : value;
+          _resultText = historyItem.value;
         });
       } else {
+        if (mounted) {
+          final l10n = AppLocalizations.of(context)!;
+          showDialog(
+            context: context,
+            builder: (ctx) => AlertDialog(
+              title: Text(l10n.scanResultTitle),
+              content: Text(l10n.noCodeFound),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(l10n.ok),
+                ),
+              ],
+            ),
+          );
+        }
         setState(() {
-          _resultText = 'No QR / Barcode found in this image.';
+          _resultText = AppLocalizations.of(context)!.noCodeFound;
         });
       }
     } catch (e) {
@@ -60,19 +72,16 @@ class _ScanImageScreenState extends State<ScanImageScreen> {
     }
   }
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
 
+    final l10n = AppLocalizations.of(context)!;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Scan from Image'),
+        title: Text(l10n.scanImage),
       ),
       body: SafeArea(
         child: Padding(
@@ -80,7 +89,7 @@ class _ScanImageScreenState extends State<ScanImageScreen> {
           child: Column(
             children: [
               Text(
-                'Pick an image from your gallery and we will try to detect any QR or Barcode present in it.',
+                l10n.onboarding1Subtitle,
                 style: textTheme.bodyMedium,
               ),
               const SizedBox(height: 16),
@@ -92,8 +101,8 @@ class _ScanImageScreenState extends State<ScanImageScreen> {
                   onPressed: _isScanning ? null : _pickAndScanImage,
                   icon: const Icon(Icons.photo_library_outlined,color: Colors.white,),
                   label: Text(
-                    _isScanning ? 'Scanning...' : 'Choose Image from Gallery',
-                    style: TextStyle(color: Colors.white),
+                    _isScanning ? '${l10n.scan}...' : l10n.permissionGalleryDesc,
+                    style: const TextStyle(color: Colors.white),
                   ),
                 ),
               ),
@@ -141,7 +150,7 @@ class _ScanImageScreenState extends State<ScanImageScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Result',
+                        l10n.scanResultTitle,
                         style: textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),

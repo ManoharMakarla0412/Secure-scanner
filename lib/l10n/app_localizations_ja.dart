@@ -428,4 +428,42 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get statusDenied => '拒否済み';
+
+  @override
+  String get downloadSuccess => 'ダウンロード成功';
+
+  @override
+  String get legalInfo => '法的情報';
+
+  @override
+  String get download => 'ダウンロード';
+
+  @override
+  String get edit => '編集';
+
+  @override
+  String get backToMain => 'メインに戻る';
+
+  @override
+  String get ok => 'OK';
+
+  @override
+  String get scanDetail => 'スキャンの詳細';
+
+  @override
+  String get scanResultTitle => 'スキャン結果';
+
+  @override
+  String get qrCodeReady => 'QRコードの準備ができました！';
+
+  @override
+  String get qrGeneratedSaved => 'QRコードが生成され、履歴に保存されました。';
+
+  @override
+  String get qrSavedToGallery => 'QRコードがギャラリーに保存されました！';
+
+  @override
+  String sharePromoText(String url) {
+    return 'SecureScanで生成されたこのQRコードをスキャンしてください: $url';
+  }
 }

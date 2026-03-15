@@ -156,5 +156,24 @@
   "permissionCameraDesc": "Necessário para escanear QR e códigos de barras",
   "permissionGalleryDesc": "Necessário para selecionar imagens da galeria",
   "statusGranted": "Concedido",
-  "statusDenied": "Negado"
+  "statusDenied": "Negado",
+  "downloadSuccess": "Download Efetuado com Sucesso",
+  "legalInfo": "Informação Legal",
+  "download": "Download",
+  "edit": "Editar",
+  "backToMain": "Voltar ao Início",
+  "ok": "OK",
+  "scanDetail": "Detalhes da Digitalização",
+  "scanResultTitle": "Resultado da Digitalização",
+  "qrCodeReady": "Código QR Pronto!",
+  "qrGeneratedSaved": "Seu código QR foi gerado e salvo no histórico.",
+  "qrSavedToGallery": "Código QR salvo na galeria!",
+  "sharePromoText": "Digitalize este código QR gerado pelo SecureScan: {url}",
+  "@sharePromoText": {
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  }
 }

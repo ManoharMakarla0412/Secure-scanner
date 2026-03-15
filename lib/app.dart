@@ -4,6 +4,8 @@ import 'package:securescan/themes.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:securescan/features/onboarding.screens/onboarding_screen.dart';
+import 'package:securescan/features/onboarding.screens/initial_permissions_screen.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:securescan/services/language_service.dart';
 import 'package:securescan/l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -64,21 +66,30 @@ class _LaunchDeciderState extends State<_LaunchDecider> {
 
   Future<void> _route() async {
     final prefs = await SharedPreferences.getInstance();
+    
+    // Explicitly check for onboarding and permissions status
+    final onboardingDone = prefs.getBool('onboarding_completed') ?? false;
+    final cameraStatus = await Permission.camera.status;
 
-    // Heuristic:
-    // - If *any* keys exist, we assume the user has used the app before.
-    // - If you prefer a stricter check, look for your specific keys, e.g.:
-    //   prefs.containsKey('scan_history')
-    final hasAnyData = prefs.getKeys().isNotEmpty;
-
-    // Ensure navigation happens after first frame
     if (!mounted) return;
+    
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(
-          builder: (_) => hasAnyData ? BottomNavShell() : const OnboardingScreen(),
-        ),
-      );
+      if (!onboardingDone) {
+        // Users who haven't finished onboarding or seen permissions screen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const OnboardingScreen()),
+        );
+      } else if (!cameraStatus.isGranted) {
+        // Finished the slides but skipped/denied camera which we want to enforce
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const InitialPermissionsScreen()),
+        );
+      } else {
+        // Ready for full app
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const BottomNavShell()),
+        );
+      }
     });
   }
 
