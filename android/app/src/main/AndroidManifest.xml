@@ -11,7 +11,7 @@
 
 
     <application
-        android:label="QR &amp; Barcode Scanner Generator"
+        android:label="# QR &amp; Barcode Scanner Generator"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
