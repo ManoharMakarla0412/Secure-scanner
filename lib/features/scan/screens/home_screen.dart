@@ -113,18 +113,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 ),
               ),
               const Spacer(flex: 4), // ~4% gap
-              // --- Banner Ad spot: Occupies 50% height ---
-              const Expanded(
-                flex: 50, // 50% height
-                child: Center(
-                  child: BannerAdWidget(adSize: AdSize.mediumRectangle),
-                ),
-              ),
+              const Spacer(flex: 50),
               const Spacer(flex: 2), // ~2% bottom spacing
             ],
           ),
         ),
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 }

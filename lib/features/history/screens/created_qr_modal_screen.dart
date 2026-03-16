@@ -448,11 +448,10 @@ class _CreatedQrModalScreenState extends State<CreatedQrModalScreen> {
               ),
             ),
           ),
-
-            const BannerAdWidget(),
           ],
         ),
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 

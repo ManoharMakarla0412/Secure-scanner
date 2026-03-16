@@ -384,12 +384,10 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         );
                       },
                     ),
-            ),
           ),
-
-          const BannerAdWidget(),
         ],
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 
 class PermissionsScreen extends StatefulWidget {
   const PermissionsScreen({super.key});
@@ -128,6 +129,7 @@ class _PermissionsScreenState extends State<PermissionsScreen> with WidgetsBindi
           ),
         ],
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 

@@ -8,7 +8,7 @@ class BannerAdWidget extends StatefulWidget {
 
   const BannerAdWidget({
     super.key,
-    this.adSize = AdSize.banner,
+    this.adSize = AdSize.largeBanner,
     this.adUnitId,
   });
 

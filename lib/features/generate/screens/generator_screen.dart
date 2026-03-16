@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:gal/gal.dart';
+import 'package:intl_phone_number_input/intl_phone_number_input.dart';
 import 'package:securescan/l10n/app_localizations.dart';
 import 'package:securescan/services/ad_manager.dart';
 import 'package:securescan/core/enums/qr_type.dart';
@@ -70,10 +71,9 @@ class CreateQRScreen extends StatelessWidget {
                   ),
                 ),
               );
-            },
-          );
         },
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 }
@@ -241,14 +241,13 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
                         _buildFormFields(textTheme, colorScheme, l10n),
                         const SizedBox(height: 32),
                         _buildCreateButton(l10n),
-                        const SizedBox(height: 24),
-                        const BannerAdWidget(),
                       ],
                     ),
             ),
           );
         },
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 
@@ -335,28 +334,24 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
               error: _controller.nameError,
               onChanged: (_) => _controller.validate(l10n),
             ),
-            _buildTextFieldWithError(
+            _buildPhoneField(
               label: l10n.phoneNumberWithAst,
               controller: _controller.phoneController,
               textTheme: textTheme,
               colorScheme: colorScheme,
               error: _controller.phoneError,
-              keyboard: TextInputType.phone,
-              onChanged: (_) => _controller.validate(l10n),
             ),
           ],
         );
       case QrType.phone:
         return Column(
           children: [
-            _buildTextFieldWithError(
+            _buildPhoneField(
               label: l10n.phoneNumberWithAst,
               controller: _controller.phoneController,
               textTheme: textTheme,
               colorScheme: colorScheme,
               error: _controller.phoneError,
-              keyboard: TextInputType.phone,
-              onChanged: (_) => _controller.validate(l10n),
             ),
           ],
         );
@@ -602,8 +597,6 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        BannerAdWidget(),
       ],
     );
   }
@@ -724,6 +717,49 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             errorStyle: const TextStyle(fontWeight: FontWeight.w500),
           ),
           onChanged: onChanged,
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildPhoneField({
+    required String label,
+    required TextEditingController controller,
+    required TextTheme textTheme,
+    required ColorScheme colorScheme,
+    String? error,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InternationalPhoneNumberInput(
+          onInputChanged: (PhoneNumber number) {
+            _controller.fullPhoneNumber = number.phoneNumber ?? '';
+            _controller.validate(AppLocalizations.of(context)!);
+          },
+          selectorConfig: const SelectorConfig(
+            selectorType: PhoneInputSelectorType.BOTTOM_SHEET,
+            useBottomSheetSafeArea: true,
+            setSelectorButtonAsPrefixIcon: true,
+            leadingPadding: 20,
+          ),
+          ignoreBlank: false,
+          autoValidateMode: AutovalidateMode.disabled,
+          selectorTextStyle: TextStyle(color: colorScheme.onSurface, fontSize: 15, fontWeight: FontWeight.w500),
+          initialValue: PhoneNumber(isoCode: 'US'),
+          textFieldController: controller,
+          formatInput: true,
+          keyboardType: const TextInputType.numberWithOptions(signed: true, decimal: true),
+          textStyle: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+          inputDecoration: _inputDecoration(label, colorScheme, textTheme).copyWith(
+            errorText: error,
+            errorStyle: const TextStyle(fontWeight: FontWeight.w500),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          onSaved: (PhoneNumber number) {
+            _controller.fullPhoneNumber = number.phoneNumber ?? '';
+          },
         ),
         const SizedBox(height: 16),
       ],
