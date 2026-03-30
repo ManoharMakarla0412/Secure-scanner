@@ -3,6 +3,7 @@ import 'package:securescan/core/enums/qr_type.dart';
 import 'package:securescan/core/models/history_item.dart';
 import 'package:securescan/core/repositories/history_repository.dart';
 import 'package:securescan/l10n/app_localizations.dart';
+import 'package:intl_phone_field/phone_number.dart';
 
 class GeneratorController extends ChangeNotifier {
   final QrType selectedType;
@@ -19,6 +20,9 @@ class GeneratorController extends ChangeNotifier {
   final wifiNameController = TextEditingController();
   final wifiPasswordController = TextEditingController();
   final textController = TextEditingController();
+
+  String fullPhoneNumber = ''; // Stores the phone number with country code
+  String? initialCountryCode = 'US';
   
   // Calendar specific
   final eventTitleController = TextEditingController();
@@ -67,6 +71,11 @@ class GeneratorController extends ChangeNotifier {
 
   void setIsCreated(bool value) {
     isCreated = value;
+    notifyListeners();
+  }
+
+  void updatePhoneNumber(PhoneNumber number) {
+    fullPhoneNumber = number.completeNumber;
     notifyListeners();
   }
 
@@ -199,9 +208,11 @@ class GeneratorController extends ChangeNotifier {
       case QrType.wifi:
         return "WIFI:S:${wifiNameController.text.trim()};T:$encryptionValue;P:${wifiPasswordController.text.trim()};;";
       case QrType.contact:
-        return "MECARD:N:${nameController.text.trim()};TEL:${phoneController.text.trim()};EMAIL:${emailController.text.trim()};ADR:${addressController.text.trim()};ORG:${companyController.text.trim()};TITLE:${designationController.text.trim()};;";
+        final phoneToUse = fullPhoneNumber.isNotEmpty ? fullPhoneNumber : phoneController.text.trim();
+        return "MECARD:N:${nameController.text.trim()};TEL:$phoneToUse;EMAIL:${emailController.text.trim()};ADR:${addressController.text.trim()};ORG:${companyController.text.trim()};TITLE:${designationController.text.trim()};;";
       case QrType.phone:
-        return "TEL:${phoneController.text.trim()}";
+        final phoneToUse = fullPhoneNumber.isNotEmpty ? fullPhoneNumber : phoneController.text.trim();
+        return "TEL:$phoneToUse";
       case QrType.email:
         return "MAILTO:${emailController.text.trim()}";
       case QrType.text:

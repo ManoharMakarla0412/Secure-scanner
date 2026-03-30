@@ -98,7 +98,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       },
     ];
 
-    const adHeight = 50.0;
+    const adHeight = 0.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -258,15 +258,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            const Positioned(
-              left: 0,
-              right: 0,
-              bottom: 0,
-              child: BannerAdWidget(),
-            ),
+
           ],
         ),
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 

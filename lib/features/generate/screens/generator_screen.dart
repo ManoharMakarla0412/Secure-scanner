@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_native_contact_picker/model/contact.dart';
@@ -11,6 +12,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:flutter_native_contact_picker/flutter_native_contact_picker.dart';
 import 'package:gal/gal.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart' as intl_phone;
+import 'package:intl_phone_field/country_picker_dialog.dart';
 import 'package:securescan/l10n/app_localizations.dart';
 import 'package:securescan/services/ad_manager.dart';
 import 'package:securescan/core/enums/qr_type.dart';
@@ -74,6 +78,7 @@ class CreateQRScreen extends StatelessWidget {
           );
         },
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 }
@@ -241,14 +246,15 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
                         _buildFormFields(textTheme, colorScheme, l10n),
                         const SizedBox(height: 32),
                         _buildCreateButton(l10n),
-                        const SizedBox(height: 24),
-                        const BannerAdWidget(),
+                        const SizedBox(height: 10),
+                        BannerAdWidget(adSize: AdSize.mediumRectangle),
                       ],
                     ),
             ),
           );
         },
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 
@@ -335,28 +341,24 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
               error: _controller.nameError,
               onChanged: (_) => _controller.validate(l10n),
             ),
-            _buildTextFieldWithError(
+            _buildPhoneField(
               label: l10n.phoneNumberWithAst,
               controller: _controller.phoneController,
               textTheme: textTheme,
               colorScheme: colorScheme,
               error: _controller.phoneError,
-              keyboard: TextInputType.phone,
-              onChanged: (_) => _controller.validate(l10n),
             ),
           ],
         );
       case QrType.phone:
         return Column(
           children: [
-            _buildTextFieldWithError(
+            _buildPhoneField(
               label: l10n.phoneNumberWithAst,
               controller: _controller.phoneController,
               textTheme: textTheme,
               colorScheme: colorScheme,
               error: _controller.phoneError,
-              keyboard: TextInputType.phone,
-              onChanged: (_) => _controller.validate(l10n),
             ),
           ],
         );
@@ -602,8 +604,6 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        BannerAdWidget(),
       ],
     );
   }
@@ -724,6 +724,42 @@ class _CreateQRCodePageState extends State<CreateQRCodePage> {
             errorStyle: const TextStyle(fontWeight: FontWeight.w500),
           ),
           onChanged: onChanged,
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildPhoneField({
+    required String label,
+    required TextEditingController controller,
+    required TextTheme textTheme,
+    required ColorScheme colorScheme,
+    String? error,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        IntlPhoneField(
+          controller: controller,
+          decoration: _inputDecoration(label, colorScheme, textTheme).copyWith(
+            errorText: error,
+            errorStyle: const TextStyle(fontWeight: FontWeight.w500),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+          initialCountryCode: _controller.initialCountryCode,
+          onChanged: (phone) {
+            _controller.updatePhoneNumber(phone);
+            _controller.validate(AppLocalizations.of(context)!);
+          },
+          onSaved: (phone) {
+            if (phone != null) _controller.updatePhoneNumber(phone);
+          },
+          pickerDialogStyle: PickerDialogStyle(
+            backgroundColor: colorScheme.surface,
+            countryCodeStyle: textTheme.bodyMedium,
+            countryNameStyle: textTheme.bodyMedium,
+          ),
         ),
         const SizedBox(height: 16),
       ],

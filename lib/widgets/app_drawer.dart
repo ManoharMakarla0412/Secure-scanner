@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:securescan/widgets/bottom_nav_shell.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:image_picker/image_picker.dart';
@@ -18,7 +19,10 @@ import 'package:securescan/features/scan/services/scanner_service.dart';
 import 'package:securescan/core/enums/qr_type.dart';
 import 'package:securescan/core/models/history_item.dart';
 
-class AppDrawer extends StatelessWidget {
+import 'package:path_provider/path_provider.dart';
+import 'package:securescan/services/ad_manager.dart';
+
+class AppDrawer extends StatefulWidget {
   const AppDrawer({
     super.key,
     this.currentBottomIndex = 0,
@@ -28,8 +32,23 @@ class AppDrawer extends StatelessWidget {
   final int currentBottomIndex;
   final ValueChanged<int>? onSelectBottomNavIndex;
 
+  @override
+  State<AppDrawer> createState() => _AppDrawerState();
+}
+
+class _AppDrawerState extends State<AppDrawer> {
   static const _primaryBlue = Color(0xFF0A66FF);
   static const String _playStoreUrl = 'https://play.google.com/store/apps/details?id=com.securescan.securescan';
+
+  final ImagePicker _picker = ImagePicker();
+  bool _isProcessing = false;
+  String? _docsDir;
+
+  @override
+  void initState() {
+    super.initState();
+    getApplicationDocumentsDirectory().then((dir) => _docsDir = dir.path);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,30 +61,43 @@ class AppDrawer extends StatelessWidget {
       child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Row(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: Image.asset('assets/secure_scan_logo.png', width: 64, height: 64, errorBuilder: (_, __, ___) => Container(color: Colors.grey[300])),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(child: Text(l10n.copyright, style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, fontSize: 18))),
-                ],
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Row(
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.asset('assets/secure_scan_logo.png', width: 64, height: 64, errorBuilder: (_, __, ___) => Container(color: Colors.grey[300])),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(child: Text(l10n.copyright, style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, fontSize: 18))),
+                        ],
+                      ),
+                    ),
+                    const Divider(height: 1),
+                    _DrawerTile(title: l10n.home, iconPath: 'assets/icons/bottom_nav_icons/home_inactive.png', iconTint: widget.currentBottomIndex == 0 ? _primaryBlue : Colors.grey[700], onTap: () => _navigateToShell(context, 0)),
+                    _DrawerTile(title: l10n.scanQr, iconPath: 'assets/icons/misc/scan_qr_icon_white.png', iconTint: _primaryBlue, onTap: () => _navigateToScanner(context)),
+                    _DrawerTile(title: l10n.scanImage, iconPath: 'assets/icons/misc/scan_image_icon.png', iconTint: _primaryBlue, onTap: _scanFromGallery),
+                    _DrawerTile(title: l10n.createQr, iconPath: 'assets/icons/misc/create_qr_icon_white.png', iconTint: _primaryBlue, onTap: () => _navigateToCreate(context)),
+                    _DrawerTile(title: l10n.myQr, iconPath: 'assets/icons/misc/my_qr_icon.png', iconTint: _primaryBlue, onTap: () => _navigateToMyQr(context)),
+                    _DrawerTile(title: l10n.history, iconPath: 'assets/icons/misc/history_App Drawer_icon.png', iconTint: _primaryBlue, onTap: () => _navigateToShell(context, 1)),
+                    _DrawerTile(title: l10n.settingsTitle, iconPath: 'assets/icons/bottom_nav_icons/settings_inactive.png', iconTint: _primaryBlue, onTap: () => _navigateToShell(context, 2)),
+                    _DrawerTile(title: l10n.shareApp, iconPath: 'assets/icons/misc/share_icon.png', iconTint: _primaryBlue, onTap: () => Share.share(l10n.shareMessage(_playStoreUrl))),
+                    _DrawerTile(title: l10n.changeTheme, iconPath: 'assets/icons/misc/theme_icon.png', iconTint: _primaryBlue, onTap: () => _toggleTheme(context)),
+                  ],
+                ),
               ),
             ),
-            const Divider(height: 1),
-            _DrawerTile(title: l10n.home, iconPath: 'assets/icons/bottom_nav_icons/home_inactive.png', iconTint: currentBottomIndex == 0 ? _primaryBlue : Colors.grey[700], onTap: () => _navigateToShell(context, 0)),
-            _DrawerTile(title: l10n.scanQr, iconPath: 'assets/icons/misc/scan_qr_icon_white.png', iconTint: _primaryBlue, onTap: () => _navigateToScanner(context)),
-            //_DrawerTile(title: l10n.scanImage, iconPath: 'assets/icons/misc/scan_image_icon.png', iconTint: _primaryBlue, onTap: () => _scanFromGallery(context)),
-            _DrawerTile(title: l10n.createQr, iconPath: 'assets/icons/misc/create_qr_icon_white.png', iconTint: _primaryBlue, onTap: () => _navigateToCreate(context)),
-            _DrawerTile(title: l10n.myQr, iconPath: 'assets/icons/misc/my_qr_icon.png', iconTint: _primaryBlue, onTap: () => _navigateToMyQr(context)),
-            _DrawerTile(title: l10n.history, iconPath: 'assets/icons/misc/history_App Drawer_icon.png', iconTint: _primaryBlue, onTap: () => _navigateToShell(context, 1)),
-            _DrawerTile(title: l10n.settingsTitle, iconPath: 'assets/icons/bottom_nav_icons/settings_inactive.png', iconTint: _primaryBlue, onTap: () => _navigateToShell(context, 2)),
-            _DrawerTile(title: l10n.shareApp, iconPath: 'assets/icons/misc/share_icon.png', iconTint: _primaryBlue, onTap: () => Share.share(l10n.shareMessage(_playStoreUrl))),
-            _DrawerTile(title: l10n.changeTheme, iconPath: 'assets/icons/misc/theme_icon.png', iconTint: _primaryBlue, onTap: () => _toggleTheme(context)),
-            const Spacer(),
+            if (_isProcessing)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            const BannerAdWidget(),
           ],
         ),
       ),
@@ -74,7 +106,11 @@ class AppDrawer extends StatelessWidget {
 
   void _navigateToShell(BuildContext context, int index) {
     Navigator.pop(context);
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BottomNavShell(initialIndex: index)));
+    if (widget.onSelectBottomNavIndex != null) {
+      widget.onSelectBottomNavIndex!(index);
+    } else {
+      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => BottomNavShell(initialIndex: index)));
+    }
   }
 
   void _navigateToScanner(BuildContext context) {
@@ -93,67 +129,79 @@ class AppDrawer extends StatelessWidget {
     Navigator.push(context, MaterialPageRoute(builder: (_) => const MyQrScreen()));
   }
 
-  Future<void> _scanFromGallery(BuildContext context) async {
-    final navigator = Navigator.of(context);
-    navigator.pop(); // Pop the drawer immediately
+  Future<void> _scanFromGallery() async {
+    if (_isProcessing) return;
+    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
 
-    final picker = ImagePicker();
-    final image = await picker.pickImage(source: ImageSource.gallery);
-    if (image == null) return;
+    setState(() => _isProcessing = true);
+    try {
+      final historyItem = await ScannerService.scanImage(picked.path);
+      if (historyItem == null) {
+        if (mounted) _showIssueDialog(AppLocalizations.of(context)!.noCodeFound);
+        setState(() => _isProcessing = false);
+        return;
+      }
+      
+      final frameBytes = await picked.readAsBytes();
+      await _handleBarcodeMLKit(historyItem, frameBytes);
+    } catch (e) {
+      if (mounted) _showIssueDialog(AppLocalizations.of(context)!.failedToScan(e.toString()));
+      setState(() => _isProcessing = false);
+    }
+  }
 
-    // Use the overlay context or check mounted to avoid using invalidated drawer context
-    if (!context.mounted) return;
+  Future<void> _handleBarcodeMLKit(HistoryItem historyItem, Uint8List imageBytes) async {
+    final raw = historyItem.value;
+    final type = historyItem.type;
 
-    showDialog(
-      context: context, 
-      barrierDismissible: false, 
-      builder: (_) => const Center(child: CircularProgressIndicator()),
+    String? savedImagePath;
+    if (_docsDir != null) {
+      final fileName = 'scan_gallery_${DateTime.now().millisecondsSinceEpoch}.jpg';
+      savedImagePath = '$_docsDir/$fileName';
+      try {
+        await File(savedImagePath).writeAsBytes(imageBytes);
+      } catch (_) {}
+    }
+
+    final finalizedItem = await ScannerService.saveToHistory(
+      raw: raw,
+      type: type,
+      imagePath: savedImagePath,
+      imageBytes: imageBytes,
+      metadata: historyItem.metadata,
     );
 
-    try {
-      final historyItem = await ScannerService.scanImage(image.path);
-      
-      if (!navigator.context.mounted) return;
-      navigator.pop(); // dismiss loading
+    await AdManager.instance.showInterstitialAd();
+    if (!mounted) return;
+    
+    // Pop drawer before navigating to result
+    Navigator.pop(context);
+    
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => QrResultScreen(result: finalizedItem)),
+    );
 
-      if (historyItem != null) {
-        // Add image bytes for immediate display
-        final bytes = await File(image.path).readAsBytes();
-        
-        // Finalize and save to repo with image data
-        final finalizedItem = await ScannerService.saveToHistory(
-          raw: historyItem.value,
-          type: historyItem.type,
-          imageBytes: bytes,
-          metadata: historyItem.metadata,
-        );
+    if (mounted) setState(() => _isProcessing = false);
+  }
 
-        if (!navigator.context.mounted) return;
-        navigator.push(MaterialPageRoute(builder: (_) => QrResultScreen(result: finalizedItem)));
-      } else {
-        if (!navigator.context.mounted) return;
-        final l10n = AppLocalizations.of(navigator.context)!;
-        showDialog(
-          context: navigator.context,
-          builder: (ctx) => AlertDialog(
-            title: Text(l10n.scanDetail),
-            content: Text(l10n.noCodeFound),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(l10n.ok),
-              ),
-            ],
+  Future<void> _showIssueDialog(String message) async {
+    if (!mounted) return;
+    final l10n = AppLocalizations.of(context)!;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(l10n.scanDetail),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text(l10n.ok),
           ),
-        );
-      }
-    } catch (e) {
-      if (navigator.context.mounted) {
-        // Try to pop the loading dialog if it's still there
-        try { navigator.pop(); } catch (_) {}
-        ScaffoldMessenger.of(navigator.context).showSnackBar(SnackBar(content: Text(AppLocalizations.of(navigator.context)!.failedToScan(e.toString()))));
-      }
-    }
+        ],
+      ),
+    );
   }
 
   Future<void> _toggleTheme(BuildContext context) async {

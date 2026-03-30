@@ -269,14 +269,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     ),
-
-          const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: const BannerAdWidget(),
-          ),
-        ],
-      ),
+  ],
+),
+      bottomNavigationBar: SafeArea(child: BannerAdWidget(adSize: AdSize.fullBanner)),
     );
   }
 
@@ -362,4 +357,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 }
-
+

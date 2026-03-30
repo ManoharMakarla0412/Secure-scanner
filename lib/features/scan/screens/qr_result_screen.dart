@@ -200,8 +200,6 @@ class _QrResultScreenState extends State<QrResultScreen> {
               _valueCard(context, textTheme),
               const SizedBox(height: 16),
               _ctaRow(context, textTheme),
-              const SizedBox(height: 16),
-              const BannerAdWidget(),
               if (widget.result.imageBytes != null || widget.result.imagePath != null) ...[
                 const SizedBox(height: 16),
                 _capturedImageSection(textTheme),
@@ -210,6 +208,7 @@ class _QrResultScreenState extends State<QrResultScreen> {
           ),
         ),
       ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
     );
   }
 
