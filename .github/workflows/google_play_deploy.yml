@@ -31,15 +31,14 @@ jobs:
       - name: Install dependencies
         run: flutter pub get
 
-      - name: Decode Keystore
-        run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app-release.jks
+      - name: Decode Keystore (Skipped, already in repo)
+        run: echo "Keystore is already in the repository."
 
       - name: Create key.properties
         run: |
-          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" > android/key.properties
-          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
-          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "storePassword=securescan123" > android/key.properties
+          echo "keyPassword=securescan123" >> android/key.properties
+          echo "keyAlias=app-release" >> android/key.properties
           echo "storeFile=../app-release.jks" >> android/key.properties
 
       - name: Build App Bundle
