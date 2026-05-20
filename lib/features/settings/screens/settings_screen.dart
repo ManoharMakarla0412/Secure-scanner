@@ -301,7 +301,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Widget _buildSettingsTile({
-    required IconData icon,
+    required FaIconData icon,
     required String title,
     required VoidCallback onTap,
   }) {
@@ -335,14 +335,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Widget _tileIcon(IconData icon, bool isDark) {
+  Widget _tileIcon(FaIconData icon, bool isDark) {
     return Container(
       width: 60,
       decoration: BoxDecoration(
         color: isDark ? Colors.white10 : const Color(0xFFF4F4F4),
         borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
       ),
-      child: Center(child: Icon(icon, color: _primaryBlue, size: 18)),
+      child: Center(child: FaIcon(icon, color: _primaryBlue, size: 18)),
     );
   }
 

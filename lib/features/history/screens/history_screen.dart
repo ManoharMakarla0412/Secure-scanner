@@ -83,7 +83,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   // _parseMecard removed as it is unused in this file
 
-  IconData _getIcon(QrType type) {
+  FaIconData _getIcon(QrType type) {
     switch (type) {
       case QrType.url:
         return FontAwesomeIcons.globe;
@@ -102,7 +102,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
       case QrType.json:
         return FontAwesomeIcons.code;
       default:
-        return Icons.info_outline;
+        return FontAwesomeIcons.circleInfo;
     }
   }
 
@@ -297,7 +297,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                     child: Column(
                                       mainAxisAlignment: MainAxisAlignment.center,
                                       children: [
-                                        Icon(
+                                        FaIcon(
                                           _getIcon(item.type),
                                           color: SecureScanTheme.accentBlue,
                                           size: 22,
