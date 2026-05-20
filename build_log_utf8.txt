@@ -1,0 +1,109 @@
+﻿Running Gradle task 'assembleDebug'...                          
+flutter : lib/features/settin
+gs/screens/permissions_screen
+.dart:180:28: Error: The 
+getter 'colorScheme' isn't 
+defined for the type 
+'_PermissionsScreenState'.
+At line:1 char:1
++ flutter build apk --debug 
+> build_log.txt 2>&1; 
+Get-Content build_log ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo           
+   : NotSpecified: (lib/fea  
+  tures/se...nsScreenState   
+ '.:String) [], RemoteExc    
+eption
+    + FullyQualifiedErrorId  
+   : NativeCommandError
+ 
+ - '_PermissionsScreenState' 
+is from 'package:securescan/f
+eatures/settings/screens/perm
+issions_screen.dart' ('lib/fe
+atures/settings/screens/permi
+ssions_screen.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'colorScheme'.
+                    color: 
+colorScheme.onBackground,
+                           
+^^^^^^^^^^^
+lib/features/settings/screens
+/permissions_screen.dart:186:
+28: Error: The getter 
+'colorScheme' isn't defined 
+for the type 
+'_PermissionsScreenState'.
+ - '_PermissionsScreenState' 
+is from 'package:securescan/f
+eatures/settings/screens/perm
+issions_screen.dart' ('lib/fe
+atures/settings/screens/permi
+ssions_screen.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'colorScheme'.
+                    color: co
+lorScheme.onSurface.withOpaci
+ty(0.6),
+                           
+^^^^^^^^^^^
+lib/features/generate/screens
+/my_qr_screen.dart:354:36: 
+Error: The getter 'download' 
+isn't defined for the type 
+'AppLocalizations'.
+ - 'AppLocalizations' is 
+from 'package:securescan/l10n
+/app_localizations.dart' ('li
+b/l10n/app_localizations.dart
+').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a getter 
+or field named 'download'.
+                  label: Text
+(l10n.download.toUpperCase(),
+ style: const 
+TextStyle(color: 
+Colors.white)),
+                             
+      ^^^^^^^^
+Target 
+kernel_snapshot_program 
+failed: Exception
+
+
+FAILURE: Build failed with 
+an exception.
+
+* What went wrong:
+Execution failed for task ':a
+pp:compileFlutterBuildDebug'.
+> Process 'command 'C:\Users\
+Naveen\develop\flutter\bin\fl
+utter.bat'' finished with 
+non-zero exit value 1
+
+* Try:
+> Run with --stacktrace 
+option to get the stack 
+trace.
+> Run with --info or --debug 
+option to get more log 
+output.
+> Run with --scan to get 
+full insights.
+> Get more help at 
+https://help.gradle.org.
+
+BUILD FAILED in 8s
+Running Gradle task 'assembleDebug'...                              8.6s
+Gradle task assembleDebug 
+failed with exit code 1

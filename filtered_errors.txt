@@ -1,0 +1,80 @@
+﻿
+  error - Undefined name 
+'HistoryRepository' - lib\fea
+tures\scan\screens\qr_result_
+screen.dart:95:13 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:122:44 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:123:48 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:124:46 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:125:46 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:126:45 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:127:46 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:128:49 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:129:44 - 
+undefined_identifier
+  error - Undefined name 
+'QrType' - lib\features\scan\
+screens\qr_result_screen.dart
+:131:45 - 
+undefined_identifier
+  error - The getter 'kind' 
+isn't defined for the type 
+'HistoryItem' - lib\features\
+scan\screens\qr_result_screen
+.dart:255:29 - 
+undefined_getter
+  error - The getter 'kind' 
+isn't defined for the type 
+'HistoryItem' - lib\features\
+scan\screens\qr_result_screen
+.dart:345:27 - 
+undefined_getter
+  error - The named 
+parameter 'imageBytes' isn't 
+defined - lib\features\scan\s
+creens\scan_screen_qr.dart:16
+9:7 - 
+undefined_named_parameter
+  error - Undefined class 
+'StreamSubscription' - lib\se
+rvices\call_manager.dart:15:3
+ - undefined_class
+  error - The named 
+parameter 'imageBytes' isn't 
+defined - lib\widgets\app_dra
+wer.dart:120:11 - 
+undefined_named_parameter
+
+

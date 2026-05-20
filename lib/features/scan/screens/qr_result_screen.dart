@@ -1,0 +1,984 @@
+// lib/features/scan/screens/qr_result_screen.dart
+// Full-screen result page with CTAs, Ad space, and captured image.
+//
+// UPDATED: show Brand / Product name (when available) instead of the
+// generic "Scanned value" for product barcodes. Falls back to product
+// code / raw value when brand/product name are not available.
+
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:intl/intl.dart';
+import 'package:securescan/services/language_service.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:securescan/l10n/app_localizations.dart';
+import 'package:securescan/widgets/banner_ad_widget.dart';
+import 'package:securescan/core/models/history_item.dart';
+import 'package:securescan/core/enums/qr_type.dart';
+import 'package:securescan/core/repositories/history_repository.dart';
+import 'package:securescan/services/product_service.dart';
+import 'package:securescan/widgets/bottom_nav_shell.dart';
+
+
+
+class QrResultScreen extends StatefulWidget {
+  final HistoryItem result;
+
+  const QrResultScreen({super.key, required this.result});
+
+  @override
+  State<QrResultScreen> createState() => _QrResultScreenState();
+}
+
+class _QrResultScreenState extends State<QrResultScreen> {
+  late Map<String, dynamic> _currentData;
+  bool _isLoadingProduct = false;
+  static const Color _primaryBlue = Color(0xFF0A66FF);
+
+  @override
+  void initState() {
+    super.initState();
+    _currentData = widget.result.metadata != null
+        ? Map<String, dynamic>.from(widget.result.metadata!)
+        : {};
+
+    // If it's a product and we don't have brand/name info, fetch it now
+    if (_isProduct &&
+        _currentData['brand'] == null &&
+        _currentData['product_name'] == null) {
+      _fetchDetails();
+    }
+  }
+
+  Future<void> _fetchDetails() async {
+    if (!mounted) return;
+    setState(() => _isLoadingProduct = true);
+
+    try {
+      final code = _currentData['code'] ?? widget.result.value;
+      final info = await ProductService.fetchProductInfo(code.toString());
+      if (info != null && mounted) {
+        setState(() {
+          _currentData.addAll(info);
+          _isLoadingProduct = false;
+        });
+        
+        // Update history in background to include the newly found info
+        _updateHistoryInBackground();
+      } else if (mounted) {
+        setState(() => _isLoadingProduct = false);
+      }
+    } catch (_) {
+      if (mounted) setState(() => _isLoadingProduct = false);
+    }
+  }
+
+  Future<void> _updateHistoryInBackground() async {
+    try {
+      final updatedItem = HistoryItem(
+        id: widget.result.id,
+        type: widget.result.type,
+        value: widget.result.value,
+        timestamp: widget.result.timestamp,
+        metadata: {...?widget.result.metadata, ..._currentData},
+        imagePath: widget.result.imagePath,
+        isCreated: widget.result.isCreated,
+        displayValue: widget.result.displayValue,
+      );
+      await HistoryRepository.instance.saveScanItem(updatedItem);
+    } catch (_) {}
+  }
+
+  // Removed unused _looksLikeProductBarcode method
+
+  bool get _isUrl => widget.result.type == QrType.url;
+  bool get _isProduct => widget.result.type == QrType.product;
+  bool get _isPhone => widget.result.type == QrType.phone;
+  bool get _isEmail => widget.result.type == QrType.email;
+  bool get _isWifi => widget.result.type == QrType.wifi;
+  bool get _isVCard => widget.result.type == QrType.contact;
+  bool get _isCalendar => widget.result.type == QrType.calendar;
+  bool get _isGeo => widget.result.type == QrType.location;
+  bool get _isJson => false; // handled by text/metadata generally
+  bool get _isText => widget.result.type == QrType.text;
+
+// Unit IDs managed in AdManager
+
+  @override
+  Widget build(BuildContext context) {
+    FirebaseAnalytics.instance.logScreenView(
+      screenName: 'QrResultScreen',
+      parameters: {'result_type': widget.result.type.name},
+    );
+
+    final theme = Theme.of(context);
+    final textTheme = theme.textTheme;
+
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: _primaryBlue,
+        foregroundColor: Colors.white,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_new, size: 20),
+          onPressed: () {
+            Navigator.of(context).pushAndRemoveUntil(
+              MaterialPageRoute(builder: (context) => const BottomNavShell()),
+              (route) => false,
+            );
+          },
+        ),
+        title: Text(AppLocalizations.of(context)!.scanResult, style: const TextStyle(color: Colors.white)),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.greenAccent.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.verified, color: Colors.greenAccent, size: 16),
+                SizedBox(width: 6),
+                Text(
+                  AppLocalizations.of(context)!.safeScan,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _securityStatus(context, textTheme),
+              const SizedBox(height: 16),
+              _headerCard(context, textTheme),
+              const SizedBox(height: 16),
+              _valueCard(context, textTheme),
+              const SizedBox(height: 16),
+              _ctaRow(context, textTheme),
+              if (widget.result.imageBytes != null || widget.result.imagePath != null) ...[
+                const SizedBox(height: 16),
+                _capturedImageSection(textTheme),
+              ],
+            ],
+          ),
+        ),
+      ),
+      bottomNavigationBar: const SafeArea(child: BannerAdWidget()),
+    );
+  }
+
+  // -------------------- Security Status --------------------
+  
+  Widget _securityStatus(BuildContext context, TextTheme textTheme) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.green.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.green.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.shield_outlined, color: Colors.green, size: 20),
+          SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              AppLocalizations.of(context)!.securityVerified,
+              style: const TextStyle(
+                color: Colors.green,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // -------------------- Header --------------------
+ 
+  Widget _headerCard(BuildContext context, TextTheme textTheme) {
+    final typeLabel = _typeLabel(context);
+    final formatLabel = widget.result.metadata?['format'] ?? 'Unknown format';
+    final timeStr = _formatTimestamp(widget.result.timestamp);
+
+    IconData leadingIcon;
+    if (_isProduct) {
+      leadingIcon = Icons.inventory_2;
+    } else {
+      switch (widget.result.type.name) {
+        case 'url':
+          leadingIcon = Icons.public;
+          break;
+        case 'phone':
+          leadingIcon = Icons.phone;
+          break;
+        case 'email':
+          leadingIcon = Icons.email_outlined;
+          break;
+        case 'wifi':
+          leadingIcon = Icons.wifi;
+          break;
+        case 'vcard':
+          leadingIcon = Icons.person;
+          break;
+        case 'calendar':
+          leadingIcon = Icons.event;
+          break;
+        case 'geo':
+          leadingIcon = Icons.location_on;
+          break;
+        case 'json':
+          leadingIcon = Icons.data_object;
+          break;
+        default:
+          leadingIcon = Icons.qr_code_2;
+      }
+    }
+
+    return InkWell(
+      onTap: () {
+        if (_isUrl) {
+          _onOpenUrl(context);
+        }
+      },
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: _primaryBlue.withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: _primaryBlue.withValues(alpha: 0.4)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: _primaryBlue,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(leadingIcon, color: Colors.white),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    typeLabel + (_isUrl ? ' (Tap to open)' : ''),
+                    style: textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: _primaryBlue,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '$timeStr • $formatLabel',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: Colors.grey.shade700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _typeLabel(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    // If it's an ISBN, prefer "Book"
+    final isIsbn = (widget.result.metadata?['isIsbn'] == true);
+    if (isIsbn) return l10n.book;
+
+    if (_isProduct) return l10n.product;
+
+    switch (widget.result.type.name) {
+      case 'url':
+        return l10n.website;
+      case 'phone':
+        return l10n.phoneNumber;
+      case 'email':
+        return l10n.emailAddress;
+      case 'wifi':
+        return l10n.wifiNetwork;
+      case 'vcard':
+        return l10n.contact;
+      case 'calendar':
+        return l10n.calendarEvent;
+      case 'geo':
+        return l10n.location;
+      case 'json':
+        return l10n.jsonData;
+      default:
+        return l10n.content;
+    }
+  }
+
+  String _formatTimestamp(DateTime dt) {
+    final locale = LanguageController.instance.currentLanguageCode;
+    return DateFormat.yMMMd(locale).add_jm().format(dt.toLocal());
+  }
+
+  // -------------------- Value card --------------------
+  //
+  // UPDATED: prefer widget.result.metadata['brand'] / ['product_name'] for products.
+  // Show a clear fallback order:
+  //  - brand (primary)
+  //  - product_name (secondary)
+  //  - code (if product)
+  //  - raw scanned value
+
+  Widget _valueCard(BuildContext context, TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
+    final bool isProductIsbn = _isProduct && (_currentData['isIsbn'] == true);
+
+    String title;
+    String mainLine;
+    String? subLine;
+
+    if (_isProduct) {
+      final brand = (_currentData['brand'] as String?)?.trim();
+      final productName = (_currentData['product_name'] as String?)?.trim();
+      final code = _currentData['code'] ?? widget.result.value;
+
+      if (brand != null && brand.isNotEmpty) {
+        title = l10n.brand;
+        mainLine = brand;
+        if (productName != null && productName.isNotEmpty) {
+          subLine = productName;
+        } else {
+          subLine = code?.toString();
+        }
+      } else if (productName != null && productName.isNotEmpty) {
+        title = l10n.product;
+        mainLine = productName;
+        subLine = code?.toString();
+      } else {
+        title = isProductIsbn ? l10n.scannedIsbn : l10n.scannedProductCode;
+        mainLine = (code ?? '').toString();
+      }
+    } else if (_isEmail) {
+      title = l10n.emailAddress;
+      mainLine = (_currentData['mailto'] as String?) ?? widget.result.value;
+    } else if (_isUrl) {
+      title = l10n.openUrl;
+      mainLine = (_currentData['url'] as String?) ?? widget.result.value;
+    } else if (_isPhone) {
+      title = l10n.phoneNumber;
+      mainLine = widget.result.value;
+    } else if (_isWifi) {
+      title = l10n.wifiNetwork;
+      mainLine = (_currentData['ssid'] as String?) ?? widget.result.value;
+    }
+    else {
+      title = l10n.scannedValue;
+      mainLine = widget.result.value;
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade100,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: Colors.black,
+                ),
+              ),
+              if (_isLoadingProduct)
+                const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          _isUrl
+              ? InkWell(
+                  onTap: () => _onOpenUrl(context),
+                  child: Text(
+                    mainLine,
+                    style: textTheme.bodyLarge?.copyWith(
+                      color: _primaryBlue,
+                      decoration: TextDecoration.underline,
+                      decorationColor: _primaryBlue.withValues(alpha: 0.5),
+                    ),
+                  ),
+                )
+              : SelectableText(
+                  mainLine,
+                  style: textTheme.bodyLarge?.copyWith(color: Colors.black87),
+                ),
+          if (subLine != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              subLine,
+              style: textTheme.bodySmall?.copyWith(
+                color: Colors.grey.shade700,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // -------------------- CTA Row --------------------
+
+  Widget _ctaRow(BuildContext context, TextTheme textTheme) {
+    final l10n = AppLocalizations.of(context)!;
+    final List<_CtaConfig> ctas = [];
+
+    if (_isProduct) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.storefront,
+          label: l10n.shopNow,
+          onTap: () => _onShopNow(context),
+        ),
+        _CtaConfig(
+          icon: Icons.search,
+          label: l10n.webSearch,
+          onTap: () => _onWebSearch(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: l10n.share,
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: l10n.copy,
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isUrl) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.open_in_browser,
+          label: l10n.open,
+          onTap: () => _onOpenUrl(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isPhone) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.call,
+          label: 'Call',
+          onTap: () => _onCall(context),
+        ),
+        _CtaConfig(icon: Icons.sms, label: l10n.sms, onTap: () => _onSms(context)),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isEmail) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.email,
+          label: 'Email',
+          onTap: () => _onComposeEmail(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isWifi) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.lock_open,
+          label: 'Copy pass',
+          onTap: () => _onCopyWifiPassword(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isVCard) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.call,
+          label: 'Call',
+          onTap: () => _onCall(context),
+        ),
+        _CtaConfig(
+          icon: Icons.person_add,
+          label: 'Add contact',
+          onTap: () => _onAddContact(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isCalendar) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.event_available,
+          label: 'Add event',
+          onTap: () => _onAddCalendar(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isGeo) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.map,
+          label: 'Open map',
+          onTap: () => _onOpenMap(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else if (_isJson || _isText) {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.search,
+          label: 'Web search',
+          onTap: () => _onWebSearch(context),
+        ),
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    } else {
+      ctas.addAll([
+        _CtaConfig(
+          icon: Icons.share,
+          label: 'Share',
+          onTap: () => _onShare(context),
+        ),
+        _CtaConfig(
+          icon: Icons.copy_all,
+          label: 'Copy',
+          onTap: () => _onCopy(context),
+        ),
+      ]);
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: _primaryBlue.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: _primaryBlue.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceAround,
+        children: ctas
+            .map((c) => _ctaItem(icon: c.icon, label: c.label, onTap: c.onTap))
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _ctaItem({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: onTap,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: _primaryBlue,
+            child: Icon(icon, color: Colors.white, size: 22),
+          ),
+          const SizedBox(height: 4),
+          Text(label, style: const TextStyle(fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
+  // ---- CTA behaviour ----
+
+  Future<void> _onShopNow(BuildContext context) async {
+    _logAction('shop_now');
+    final query = _isProduct
+        ? (widget.result.metadata?['code'] ?? widget.result.value).toString()
+        : widget.result.value;
+
+    final uri = Uri.https('www.google.com', '/search', {
+      'q': query,
+      'tbm': 'shop',
+    });
+
+    await _launchOrSnack(context, uri);
+  }
+
+  Future<void> _onWebSearch(BuildContext context) async {
+    _logAction('web_search');
+    final q = _displayValueForSearch();
+    final uri = Uri.https('www.google.com', '/search', {'q': q});
+    await _launchOrSnack(context, uri);
+  }
+
+  Future<void> _onOpenUrl(BuildContext context) async {
+    _logAction('open_url');
+    String val = _displayValueForSearch().trim();
+    if (!val.startsWith('http://') && !val.startsWith('https://')) {
+      val = 'https://$val';
+    }
+    final uri = Uri.parse(val);
+    await _launchOrSnack(context, uri, openDirect: true);
+  }
+
+  Future<void> _onShare(BuildContext context) async {
+    _logAction('share');
+    await SharePlus.instance.share(ShareParams(text: _displayValueForSearch()));
+  }
+
+  Future<void> _onCopy(BuildContext context) async {
+    _logAction('copy');
+    await Clipboard.setData(ClipboardData(text: _displayValueForSearch()));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.copiedToClipboard)));
+  }
+
+  Future<void> _onCall(BuildContext context) async {
+    _logAction('call');
+    String value = _displayValueForSearch();
+    String? phoneToCall;
+
+    // If this is a vCard payload, try to extract the first phone number
+    if (_isVCard || value.contains('BEGIN:VCARD')) {
+      final lines = value.split(RegExp(r'\r?\n'));
+      for (final line in lines) {
+        final upper = line.toUpperCase();
+        if (upper.startsWith('TEL')) {
+          // vCard TEL;TYPE=CELL:+123456789 or TEL:+123456789
+          final parts = line.split(':');
+          if (parts.length > 1) {
+            final candidate = parts.last.trim();
+            if (candidate.isNotEmpty) {
+              phoneToCall = candidate;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // Fallback: if we didn’t find a phone in vCard, use the scanned value
+    phoneToCall ??= value;
+
+    final uri = Uri.parse('tel:$phoneToCall');
+    await _launchOrSnack(context, uri, openDirect: true);
+  }
+
+  Future<void> _onSms(BuildContext context) async {
+    _logAction('sms');
+    final uri = Uri.parse('sms:${_displayValueForSearch()}');
+    await _launchOrSnack(context, uri, openDirect: true);
+  }
+
+  Future<void> _onComposeEmail(BuildContext context) async {
+    _logAction('compose_email');
+    final addr = _displayValueForSearch();
+    final uri = Uri.parse('mailto:$addr');
+    await _launchOrSnack(context, uri, openDirect: true);
+  }
+
+  Future<void> _onCopyWifiPassword(BuildContext context) async {
+    _logAction('copy_wifi_password');
+    final pass = (widget.result.metadata?['password'] ?? '') as String;
+    final text = pass.isEmpty ? _displayValueForSearch() : pass;
+    await Clipboard.setData(ClipboardData(text: text));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(AppLocalizations.of(context)!.wifiPassCopied)));
+  }
+
+  /// Create a .vcf file from the vCard text and let the OS
+  /// open it with the default Contacts app (via share sheet).
+  Future<void> _onAddContact(BuildContext context) async {
+    _logAction('add_contact');
+    try {
+      final vcard =
+          _displayValueForSearch(); // should be full BEGIN:VCARD ... text
+
+      if (!vcard.contains('BEGIN:VCARD')) {
+        // Fallback: just copy text if this isn't a vCard payload
+        await Clipboard.setData(ClipboardData(text: vcard));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(AppLocalizations.of(context)!.contactDataCopied),
+          ),
+        );
+        return;
+      }
+
+      final dir = await getTemporaryDirectory();
+      final file = File(
+        '${dir.path}/contact_${DateTime.now().millisecondsSinceEpoch}.vcf',
+      );
+      await file.writeAsString(vcard);
+
+      final xFile = XFile(file.path, mimeType: 'text/x-vcard');
+
+      // This will show the system share sheet; on phones, Contacts
+      // app will usually appear as an option to directly import.
+      await SharePlus.instance.share(ShareParams(
+        files: [xFile],
+        subject: 'Add contact',
+        text: 'Import this contact into your Contacts app.',
+      ));
+    } catch (_) {
+      // Last-resort fallback
+      await Clipboard.setData(ClipboardData(text: _displayValueForSearch()));
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open Contacts – contact data copied instead.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _onAddCalendar(BuildContext context) async {
+    _logAction('add_calendar_event');
+    await Clipboard.setData(ClipboardData(text: _displayValueForSearch()));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+            content: Text(AppLocalizations.of(context)!.eventDataCopied),
+      ),
+    );
+  }
+
+  Future<void> _onOpenMap(BuildContext context) async {
+    _logAction('open_map');
+    double? lat = widget.result.metadata?['lat'] is num
+        ? (widget.result.metadata!['lat'] as num).toDouble()
+        : null;
+    double? lng = widget.result.metadata?['lng'] is num
+        ? (widget.result.metadata!['lng'] as num).toDouble()
+        : null;
+
+    Uri uri;
+    if (lat != null && lng != null) {
+      uri = Uri.parse(
+        'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+      );
+    } else {
+      final q = _displayValueForSearch();
+      uri = Uri.parse('https://www.google.com/maps/search/?api=1&query=$q');
+    }
+
+    await _launchOrSnack(context, uri, openDirect: true);
+  }
+
+  Future<void> _launchOrSnack(
+    BuildContext context,
+    Uri uri, {
+    bool openDirect = false,
+  }) async {
+    try {
+      if (openDirect) {
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } else {
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+        } else {
+          throw Exception('Cannot open URL');
+        }
+      }
+    } catch (_) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar( SnackBar(content: Text(AppLocalizations.of(context)!.failedToScan('Link'))));
+      }
+    }
+  }
+
+  // -------------------- Ad + image --------------------
+
+  // Ad space widget now handled by BannerAdWidget
+
+
+
+  // -------------------- Captured Image --------------------
+
+  Widget _capturedImageSection(TextTheme textTheme) {
+    Widget image;
+    if (widget.result.imageBytes != null) {
+      image = Image.memory(widget.result.imageBytes!, fit: BoxFit.cover);
+    } else if (widget.result.imagePath != null && File(widget.result.imagePath!).existsSync()) {
+      image = Image.file(File(widget.result.imagePath!), fit: BoxFit.cover);
+    } else {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Captured image',
+          style: textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 8),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: SizedBox(
+            width: double.infinity,
+            height: 220,
+            child: image,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // -------------------- Utilities --------------------
+
+  // Value used for sharing / web search / copy etc. Prefer brand/product_name
+  // for product results because that is more useful to users when searching.
+  String _displayValueForSearch() {
+    if (_isProduct) {
+      final brand = (widget.result.metadata?['brand'] as String?)?.trim();
+      final productName = (widget.result.metadata?['product_name'] as String?)?.trim();
+      final code = widget.result.metadata?['code'] ?? widget.result.value;
+
+      if (brand != null &&
+          brand.isNotEmpty &&
+          productName != null &&
+          productName.isNotEmpty) {
+        return '$brand $productName';
+      }
+      if (brand != null && brand.isNotEmpty) return brand;
+      if (productName != null && productName.isNotEmpty) return productName;
+      return code?.toString() ?? widget.result.value;
+    }
+
+    if (_isEmail && widget.result.metadata?['mailto'] is String) {
+      return widget.result.metadata!['mailto'] as String;
+    }
+
+    return widget.result.value;
+  }
+
+  void _logAction(String action) {
+    FirebaseAnalytics.instance.logEvent(
+      name: 'result_action',
+      parameters: {
+        'action': action,
+        'type': widget.result.type.name,
+      },
+    );
+  }
+}
+
+// Simple config holder for CTAs
+class _CtaConfig {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  _CtaConfig({required this.icon, required this.label, required this.onTap});
+}
